@@ -1,0 +1,600 @@
+agent-persona
+apple
+autonomous-ai-agents
+creative
+data-science
+devops
+dogfood
+email
+fileops
+github
+media
+mlops
+note-taking
+productivity
+red-teaming
+research
+skilldev
+smart-home
+social-media
+software-development
+trading
+yuanbao
+
+=== Skill Tree ===
+---
+/home/hsieh89t_gmail_com/.hermes/skills/github/github-auth/SKILL.md
+---
+name: github-auth
+description: "GitHub auth setup: HTTPS tokens, SSH keys, gh CLI login."
+version: 1.1.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/github/github-issues/SKILL.md
+---
+name: github-issues
+description: "Create, triage, label, assign GitHub issues via gh or REST."
+version: 1.1.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/github/github-pr-workflow/SKILL.md
+---
+name: github-pr-workflow
+description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
+version: 1.1.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/github/github-code-review/SKILL.md
+---
+name: github-code-review
+description: "Review PRs: diffs, inline comments via gh or REST."
+version: 1.1.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/github/codebase-inspection/SKILL.md
+---
+name: codebase-inspection
+description: "Inspect codebases w/ pygount: LOC, languages, ratios."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/github/github-repo-management/SKILL.md
+---
+name: github-repo-management
+description: "Clone/create/fork repos; manage remotes, releases."
+version: 1.1.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/skilldev/skilldev-v2/SKILL.md
+---
+name: skilldev-v2
+description: 自動化技能創建、改進、版本化、Curator 整合、成本監控、部署管理
+version: 2.1.0
+author: Lucian
+---
+/home/hsieh89t_gmail_com/.hermes/skills/devops/kanban-worker/SKILL.md
+---
+name: kanban-worker
+description: Pitfalls, examples, and edge cases for Hermes Kanban workers. The lifecycle itself is auto-injected into every worker's system prompt as KANBAN_GUIDANCE (from agent/prompt_builder.py); this skill is what you load when you want deeper detail on specific scenarios.
+version: 2.0.0
+platforms: [linux, macos, windows]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/devops/devops-v2/SKILL.md
+---
+name: devops-v2
+description: 系統監控、效能優化、自動維護 — 三層閾值 (CPU/Memory/Disk) + 清理管線
+version: 2.1.0
+author: Lucian
+---
+/home/hsieh89t_gmail_com/.hermes/skills/devops/kanban-orchestrator/SKILL.md
+---
+name: kanban-orchestrator
+description: Decomposition playbook + anti-temptation rules for an orchestrator profile routing work through Kanban. The "don't do the work yourself" rule and the basic lifecycle are auto-injected into every kanban worker's system prompt; this skill is the deeper playbook when you're specifically playing the orchestrator role.
+version: 3.0.0
+platforms: [linux, macos, windows]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/test-driven-development/SKILL.md
+---
+name: test-driven-development
+description: "TDD: enforce RED-GREEN-REFACTOR, tests before code."
+version: 1.1.0
+author: Hermes Agent (adapted from obra/superpowers)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/spike/SKILL.md
+---
+name: spike
+description: "Throwaway experiments to validate an idea before build."
+version: 1.0.0
+author: Hermes Agent (adapted from gsd-build/get-shit-done)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/plan/SKILL.md
+---
+name: plan
+description: "Plan mode: write an actionable markdown plan to .hermes/plans/, no execution. Bite-sized tasks, exact paths, complete code."
+version: 2.0.0
+author: Hermes Agent (writing-craft adapted from obra/superpowers)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/node-inspect-debugger/SKILL.md
+---
+name: node-inspect-debugger
+description: "Debug Node.js via --inspect + Chrome DevTools Protocol CLI."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/systematic-debugging/SKILL.md
+---
+name: systematic-debugging
+description: "4-phase root cause debugging: understand bugs before fixing."
+version: 1.1.0
+author: Hermes Agent (adapted from obra/superpowers)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/hermes-agent-skill-authoring/SKILL.md
+---
+name: hermes-agent-skill-authoring
+description: "Author in-repo SKILL.md: frontmatter, validator, structure."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/conversation-architecture/SKILL.md
+---
+name: conversation-architecture
+description: 企業級對話系統架構設計 — 狀態自校驗、動態豁免邊界、容量防護、全息記憶壓縮。適用於常駐 AI agent 的 system prompt 設計
+version: 1.0.0
+author: Lucian
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/requesting-code-review/SKILL.md
+---
+name: requesting-code-review
+description: "Pre-commit review: security scan, quality gates, auto-fix."
+version: 2.0.0
+author: Hermes Agent (adapted from obra/superpowers + MorAlekss)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/software-development/python-debugpy/SKILL.md
+---
+name: python-debugpy
+description: "Debug Python: pdb REPL + debugpy remote (DAP)."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/research/arxiv/SKILL.md
+---
+name: arxiv
+description: "Search arXiv papers by keyword, author, category, or ID."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/research/llm-wiki/SKILL.md
+---
+name: llm-wiki
+description: "Karpathy's LLM Wiki: build/query interlinked markdown KB."
+version: 2.1.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/research/research-paper-writing/SKILL.md
+---
+name: research-paper-writing
+title: Research Paper Writing Pipeline
+description: "Write ML papers for NeurIPS/ICML/ICLR: design→submit."
+version: 1.1.0
+---
+/home/hsieh89t_gmail_com/.hermes/skills/research/polymarket/SKILL.md
+---
+name: polymarket
+description: "Query Polymarket: markets, prices, orderbooks, history."
+version: 1.0.0
+author: Hermes Agent + Teknium
+---
+/home/hsieh89t_gmail_com/.hermes/skills/research/blogwatcher/SKILL.md
+---
+name: blogwatcher
+description: "Monitor blogs and RSS/Atom feeds via blogwatcher-cli tool."
+version: 2.0.0
+author: JulienTant (fork of Hyaxia/blogwatcher)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/email/himalaya/SKILL.md
+---
+name: himalaya
+description: "Himalaya CLI: IMAP/SMTP email from terminal."
+version: 1.1.0
+author: community
+---
+/home/hsieh89t_gmail_com/.hermes/skills/dogfood/SKILL.md
+---
+name: dogfood
+description: "Exploratory QA of web apps: find bugs, evidence, reports."
+version: 1.0.0
+platforms: [linux, macos, windows]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/fileops/fileops-v2/SKILL.md
+---
+name: fileops-v2
+description: 檔案組織、重複刪除、備份管理、存儲最佳化 — 三層安全等級 (L1/L2/L3)
+version: 2.0.0
+author: Lucian
+---
+/home/hsieh89t_gmail_com/.hermes/skills/autonomous-ai-agents/claude-code/SKILL.md
+---
+name: claude-code
+description: "Delegate coding to Claude Code CLI (features, PRs)."
+version: 2.2.0
+author: Hermes Agent + Teknium
+---
+/home/hsieh89t_gmail_com/.hermes/skills/autonomous-ai-agents/hermes-agent/SKILL.md
+---
+name: hermes-agent
+description: "Configure, extend, or contribute to Hermes Agent."
+version: 2.1.0
+author: Hermes Agent + Teknium
+---
+/home/hsieh89t_gmail_com/.hermes/skills/autonomous-ai-agents/opencode/SKILL.md
+---
+name: opencode
+description: "Delegate coding to OpenCode CLI (features, PR review)."
+version: 1.2.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/autonomous-ai-agents/codex/SKILL.md
+---
+name: codex
+description: "Delegate coding to OpenAI Codex CLI (features, PRs)."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/media/youtube-content/SKILL.md
+---
+name: youtube-content
+description: "YouTube transcripts to summaries, threads, blogs."
+platforms: [linux, macos, windows]
+---
+---
+/home/hsieh89t_gmail_com/.hermes/skills/media/heartmula/SKILL.md
+---
+name: heartmula
+description: "HeartMuLa: Suno-like song generation from lyrics + tags."
+version: 1.0.0
+platforms: [linux, macos, windows]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/media/gif-search/SKILL.md
+---
+name: gif-search
+description: "Search/download GIFs from Tenor via curl + jq."
+version: 1.1.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/media/songsee/SKILL.md
+---
+name: songsee
+description: "Audio spectrograms/features (mel, chroma, MFCC) via CLI."
+version: 1.0.0
+author: community
+---
+/home/hsieh89t_gmail_com/.hermes/skills/social-media/xurl/SKILL.md
+---
+name: xurl
+description: "X/Twitter via xurl CLI: post, search, DM, media, v2 API."
+version: 1.1.1
+author: xdevplatform + openclaw + Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/trading/trading-v2/SKILL.md
+---
+name: trading-v2
+description: 股票/ETF 交易決策與執行管理 — 6 條件 AND 邏輯，Kelly 分數，風險控制
+version: 2.0.0
+author: Lucian
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/maps/SKILL.md
+---
+name: maps
+description: "Geocode, POIs, routes, timezones via OpenStreetMap/OSRM."
+version: 1.2.0
+author: Mibayy
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/notion/SKILL.md
+---
+name: notion
+description: "Notion API + ntn CLI: pages, databases, markdown, Workers."
+version: 2.0.0
+author: community
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/nano-pdf/SKILL.md
+---
+name: nano-pdf
+description: "Edit PDF text/typos/titles via nano-pdf CLI (NL prompts)."
+version: 1.0.0
+author: community
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/powerpoint/SKILL.md
+---
+name: powerpoint
+description: "Create, read, edit .pptx decks, slides, notes, templates."
+license: Proprietary. LICENSE.txt has complete terms
+platforms: [linux, macos, windows]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/teams-meeting-pipeline/SKILL.md
+---
+name: teams-meeting-pipeline
+description: "Operate the Teams meeting summary pipeline via Hermes CLI — summarize meetings, inspect pipeline status, replay jobs, manage Microsoft Graph subscriptions."
+version: 1.1.0
+author: Hermes Agent + Teknium
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/airtable/SKILL.md
+---
+name: airtable
+description: Airtable REST API via curl. Records CRUD, filters, upserts.
+version: 1.1.0
+author: community
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/google-workspace/SKILL.md
+---
+name: google-workspace
+description: "Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python."
+version: 1.1.0
+author: Nous Research
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/ocr-and-documents/SKILL.md
+---
+name: ocr-and-documents
+description: "Extract text from PDFs/scans (pymupdf, marker-pdf)."
+version: 2.3.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/productivity/data-pipeline/SKILL.md
+---
+name: data-pipeline
+description: 每日數據管線：爬蟲 → 分析 → Telegram 推播（Tasker + 小任務）。支援 --daily / --briefing / --weekly / --stats 四種模式
+version: 1.0.0
+author: Lucian
+---
+/home/hsieh89t_gmail_com/.hermes/skills/apple/apple-notes/SKILL.md
+---
+name: apple-notes
+description: "Manage Apple Notes via memo CLI: create, search, edit."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/apple/imessage/SKILL.md
+---
+name: imessage
+description: Send and receive iMessages/SMS via the imsg CLI on macOS.
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/apple/apple-reminders/SKILL.md
+---
+name: apple-reminders
+description: "Apple Reminders via remindctl: add, list, complete."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/apple/findmy/SKILL.md
+---
+name: findmy
+description: "Track Apple devices/AirTags via FindMy.app on macOS."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/apple/macos-computer-use/SKILL.md
+---
+name: macos-computer-use
+description: |
+  Drive the macOS desktop in the background — screenshots, mouse, keyboard,
+  scroll, drag — without stealing the user's cursor, keyboard focus, or
+---
+/home/hsieh89t_gmail_com/.hermes/skills/agent-persona/lucian-multi-skill-base/SKILL.md
+---
+name: lucian-multi-skill-base
+description: Hermes Agent 多技能基礎框架：交易、系統優化、電腦整理、技能演進
+version: 1.1.0
+author: Lucian
+---
+/home/hsieh89t_gmail_com/.hermes/skills/agent-persona/lucian-bedrock-matrix/SKILL.md
+---
+name: lucian-bedrock-matrix
+description: 磐石矩陣 v1.0 — Lucian 5層決策 + 磐石狀態自校驗 + 容量防護
+version: 1.0.0
+author: Lucian
+---
+/home/hsieh89t_gmail_com/.hermes/skills/red-teaming/godmode/SKILL.md
+---
+name: godmode
+description: "Jailbreak LLMs: Parseltongue, GODMODE, ULTRAPLINIAN."
+version: 1.0.0
+author: Hermes Agent + Teknium
+---
+/home/hsieh89t_gmail_com/.hermes/skills/smart-home/openhue/SKILL.md
+---
+name: openhue
+description: "Control Philips Hue lights, scenes, rooms via OpenHue CLI."
+version: 1.0.0
+author: community
+---
+/home/hsieh89t_gmail_com/.hermes/skills/data-science/jupyter-live-kernel/SKILL.md
+---
+name: jupyter-live-kernel
+description: "Iterative Python via live Jupyter kernel (hamelnb)."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/note-taking/obsidian/SKILL.md
+---
+name: obsidian
+description: Read, search, create, and edit notes in the Obsidian vault.
+platforms: [linux, macos, windows]
+---
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/manim-video/SKILL.md
+---
+name: manim-video
+description: "Manim CE animations: 3Blue1Brown math/algo videos."
+version: 1.0.0
+platforms: [linux, macos, windows]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/humanizer/SKILL.md
+---
+name: humanizer
+description: "Humanize text: strip AI-isms and add real voice."
+version: 2.5.1
+author: Siqi Chen (@blader, https://github.com/blader/humanizer), ported by Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/ascii-art/SKILL.md
+---
+name: ascii-art
+description: "ASCII art: pyfiglet, cowsay, boxes, image-to-ascii."
+version: 4.0.0
+author: 0xbyt4, Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/p5js/SKILL.md
+---
+name: p5js
+description: "p5.js sketches: gen art, shaders, interactive, 3D."
+version: 1.0.0
+platforms: [linux, macos, windows]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/popular-web-designs/SKILL.md
+---
+name: popular-web-designs
+description: 54 real design systems (Stripe, Linear, Vercel) as HTML/CSS.
+version: 1.0.0
+author: Hermes Agent + Teknium (design systems sourced from VoltAgent/awesome-design-md)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/pretext/SKILL.md
+---
+name: pretext
+description: "Use when building creative browser demos with @chenglou/pretext — DOM-free text layout for ASCII art, typographic flow around obstacles, text-as-geometry games, kinetic typography, and text-powered generative art. Produces single-file HTML demos by default."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/claude-design/SKILL.md
+---
+name: claude-design
+description: Design one-off HTML artifacts (landing, deck, prototype).
+version: 1.0.0
+author: BadTechBandit
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/touchdesigner-mcp/SKILL.md
+---
+name: touchdesigner-mcp
+description: "Control a running TouchDesigner instance via twozero MCP — create operators, set parameters, wire connections, execute Python, build real-time visuals. 36 native tools."
+version: 1.1.0
+author: kshitijk4poor
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/comfyui/SKILL.md
+---
+name: comfyui
+description: "Generate images, video, and audio with ComfyUI — install, launch, manage nodes/models, run workflows with parameter injection. Uses the official comfy-cli for lifecycle and direct REST/WebSocket API for execution."
+version: 5.1.0
+author: [kshitijk4poor, alt-glitch, purzbeats]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/architecture-diagram/SKILL.md
+---
+name: architecture-diagram
+description: "Dark-themed SVG architecture/cloud/infra diagrams as HTML."
+version: 1.0.0
+author: Cocoon AI (hello@cocoon-ai.com), ported by Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/baoyu-infographic/SKILL.md
+---
+name: baoyu-infographic
+description: "Infographics: 21 layouts x 21 styles (信息图, 可视化)."
+version: 1.56.1
+author: 宝玉 (JimLiu)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/sketch/SKILL.md
+---
+name: sketch
+description: "Throwaway HTML mockups: 2-3 design variants to compare."
+version: 1.0.0
+author: Hermes Agent (adapted from gsd-build/get-shit-done)
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/design-md/SKILL.md
+---
+name: design-md
+description: Author/validate/export Google's DESIGN.md token spec files.
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/excalidraw/SKILL.md
+---
+name: excalidraw
+description: "Hand-drawn Excalidraw JSON diagrams (arch, flow, seq)."
+version: 1.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/ascii-video/SKILL.md
+---
+name: ascii-video
+description: "ASCII video: convert video/audio to colored ASCII MP4/GIF."
+platforms: [linux, macos, windows]
+---
+---
+/home/hsieh89t_gmail_com/.hermes/skills/creative/songwriting-and-ai-music/SKILL.md
+---
+name: songwriting-and-ai-music
+description: "Songwriting craft and Suno AI music prompts."
+tags: [songwriting, music, suno, parody, lyrics, creative]
+platforms: [linux, macos, windows]
+---
+/home/hsieh89t_gmail_com/.hermes/skills/mlops/huggingface-hub/SKILL.md
+---
+name: huggingface-hub
+description: "HuggingFace hf CLI: search/download/upload models, datasets."
+version: 1.0.0
+author: Hugging Face
+---
+/home/hsieh89t_gmail_com/.hermes/skills/mlops/models/audiocraft/SKILL.md
+---
+name: audiocraft-audio-generation
+description: "AudioCraft: MusicGen text-to-music, AudioGen text-to-sound."
+version: 1.0.0
+author: Orchestra Research
+---
+/home/hsieh89t_gmail_com/.hermes/skills/mlops/models/segment-anything/SKILL.md
+---
+name: segment-anything-model
+description: "SAM: zero-shot image segmentation via points, boxes, masks."
+version: 1.0.0
+author: Orchestra Research
+---
+/home/hsieh89t_gmail_com/.hermes/skills/mlops/evaluation/lm-evaluation-harness/SKILL.md
+---
+name: evaluating-llms-harness
+description: "lm-eval-harness: benchmark LLMs (MMLU, GSM8K, etc.)."
+version: 1.0.0
+author: Orchestra Research
+---
+/home/hsieh89t_gmail_com/.hermes/skills/mlops/evaluation/weights-and-biases/SKILL.md
+---
+name: weights-and-biases
+description: "W&B: log ML experiments, sweeps, model registry, dashboards."
+version: 1.0.0
+author: Orchestra Research
+---
+/home/hsieh89t_gmail_com/.hermes/skills/mlops/inference/vllm/SKILL.md
+---
+name: serving-llms-vllm
+description: "vLLM: high-throughput LLM serving, OpenAI API, quantization."
+version: 1.0.0
+author: Orchestra Research
+---
+/home/hsieh89t_gmail_com/.hermes/skills/mlops/inference/llama-cpp/SKILL.md
+---
+name: llama-cpp
+description: llama.cpp local GGUF inference + HF Hub model discovery.
+version: 2.1.2
+author: Orchestra Research
+---
+/home/hsieh89t_gmail_com/.hermes/skills/mlops/inference/obliteratus/SKILL.md
+---
+name: obliteratus
+description: "OBLITERATUS: abliterate LLM refusals (diff-in-means)."
+version: 2.0.0
+author: Hermes Agent
+---
+/home/hsieh89t_gmail_com/.hermes/skills/yuanbao/SKILL.md
+---
+name: yuanbao
+description: "Yuanbao (元宝) groups: @mention users, query info/members."
+version: 1.0.0
+platforms: [linux, macos, windows]
+=== Hermes Plugins ===
+hermes-telemetry
