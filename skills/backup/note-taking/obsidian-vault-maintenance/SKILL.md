@@ -239,6 +239,19 @@ Create a `🏷️ 標籤系統總覽.md` with:
 - Tree-style visual of the tag hierarchy
 - Optional Dataview query for tag usage counts
 
+### Syncthing & Sync Disaster Prevention
+
+If the Obsidian vault is synced with Syncthing (look for `.stfolder` in the vault root):
+
+1. **CHECK SYNC SETTINGS FIRST** before any bulk operation — mass file changes during vault maintenance can trigger a sync storm that propagates deletions.
+2. **`ignoreDelete=true`** — If the vault is under Syncthing, recommend setting `ignoreDelete=true` for the folder. Otherwise, a remote device connecting with an empty folder will wipe the entire vault.
+3. **Enable versioning** — Syncthing's Simple File Versioning (5 copies, 1-hour cleanup) creates `.stversions` as a safety net.
+4. **Pause Syncthing during maintenance** — Before running any bulk rename/merge operation, tell the user to pause Syncthing on ALL connected devices. Resume only after the vault is stable.
+5. **Sendreceive is dangerous** — Two-way sync means deletions on any connected device propagate everywhere. Prefer `sendonly` (primary) + `receiveonly` (secondary) for mission-critical vaults.
+6. **Fresh VMs wipe data** — Never connect a new VM instance in sendreceive mode to a folder that already has data. The VM's empty state overwrites the local data.
+
+See `data-backup` skill for full Syncthing disaster recovery workflow.
+
 ## Pitfalls
 
 1. **Section duplication** — always check `has_section()` before appending a `## 📋 相關文件` block. Concept index files already have structured listings.
