@@ -12,7 +12,6 @@ media
 mlops
 note-taking
 productivity
-red-teaming
 research
 skilldev
 smart-home
