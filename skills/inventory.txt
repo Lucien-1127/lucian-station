@@ -8,13 +8,15 @@ dogfood
 email
 fileops
 github
+mcp
 media
 mlops
 note-taking
+openclaw-imports
+powershell-wsl-bridge
 productivity
 research
 skilldev
-smart-home
 social-media
 software-development
 trading
