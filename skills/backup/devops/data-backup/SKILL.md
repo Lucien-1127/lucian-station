@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [backup, disaster-recovery, syncthing, file-recovery, Recuva, PhotoRec, skills-backup]
-    related_skills: [obsidian-vault-maintenance, github-repo-management, vm-sync]
+    related_skills: [obsidian-vault-maintenance, github-repo-management, vm-sync, windows-host-operations]
 ---
 
 # Data Backup & Recovery
