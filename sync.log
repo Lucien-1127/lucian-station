@@ -137,3 +137,18 @@ fatal: Could not read from remote repository.
 Please make sure you have the correct access rights
 and the repository exists.
 git pull 失敗（可能無網路或首次），繼續同步
+ssh: Could not resolve hostname github.com: Temporary failure in name resolution
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+  => push 失敗（可能無網路）
+2026-06-09 01:00:46 === 同步完成 ===
+
+2026-06-09 02:00:47 === Hermes 技能同步開始 ===
+ssh: Could not resolve hostname github.com: Temporary failure in name resolution
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+git pull 失敗（可能無網路或首次），繼續同步
