@@ -70,18 +70,11 @@ for s in data.get('siblings', []):
 
 ### Step 2: Download the GGUF
 
-For large files (5GB+), use Python with progress tracking rather than wget (more reliable for HuggingFace CDN):
+For large files (5GB+), use Python with progress tracking rather than wget (more reliable for HuggingFace CDN). See `scripts/gguf-download.py` for a ready-to-use script:
 
-```python
-import urllib.request
-url = "https://huggingface.co/<org>/<repo>/resolve/main/<filename>.gguf"
-req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-resp = urllib.request.urlopen(req, timeout=30)
-total = int(resp.headers.get('Content-Length', 0))
-# Download in chunks with progress...
+```bash
+python3 scripts/gguf-download.py "https://huggingface.co/<org>/<repo>/resolve/main/<file>.gguf" ./output.gguf
 ```
-
-See `references/gguf-download.py` for a complete download script with progress bar.
 
 **Speed note**: HuggingFace download speeds from Taiwan can be slow (~1MB/s). A 7GB file takes ~100 minutes. There is no fast workaround without aria2c (requires sudo).
 
@@ -167,6 +160,27 @@ For systems with limited VRAM (e.g. RTX 2050 4GB):
 - 8B Q4_K_M ≈ 5GB — needs ~6GB free RAM
 - Use `num_ctx` in Modelfile to limit context window and reduce memory usage
 
+### RTX 2050 (4GB VRAM) Benchmarks
+
+| Model          | Size   | VRAM Used | Prompt tok/s | Generate tok/s | Notes                    |
+|----------------|--------|-----------|--------------|----------------|--------------------------|
+| 8B Q4_K_M      | ~5GB   | 3.2GB     | 80           | 21             | ✅ Recommended — fast    |
+| 12B Q4_K_M     | ~7GB   | 3.2GB     | 95           | 5.9            | ⚠️ Mostly CPU — slow    |
+
+**Recommendation**: On 4GB VRAM, prefer 8B models over 12B. The 8B model runs ~3.5x faster because more layers fit on GPU.
+
+### Checking VRAM Usage
+
+```bash
+# API endpoint
+curl -s http://localhost:11434/api/ps
+
+# CLI
+ollama ps
+```
+
+Shows `size_vram` per loaded model, useful for confirming GPU offload percentage.
+
 ## Pitfalls
 
 ### Pitfall 1: Ollama CLI from WSL tries to start server
@@ -188,3 +202,28 @@ FROM ./model.gguf
 PROJECTOR ./mmproj.gguf
 ```
 Not all Ollama versions support PROJECTOR — check `ollama --help`.
+
+## GPU Optimization (Permanent Env Vars)
+
+For systems with small VRAM, set these Windows user environment variables via PowerShell to permanently optimize Ollama:
+
+```powershell
+[System.Environment]::SetEnvironmentVariable('OLLAMA_FLASH_ATTENTION', '1', 'User')
+[System.Environment]::SetEnvironmentVariable('OLLAMA_KV_CACHE_TYPE', 'q8_0', 'User')
+[System.Environment]::SetEnvironmentVariable('OLLAMA_MAX_LOADED_MODELS', '1', 'User')
+[System.Environment]::SetEnvironmentVariable('OLLAMA_NUM_PARALLEL', '1', 'User')
+[System.Environment]::SetEnvironmentVariable('OLLAMA_NUM_CTX', '4096', 'User')
+[System.Environment]::SetEnvironmentVariable('OLLAMA_KEEP_ALIVE', '10m', 'User')
+[System.Environment]::SetEnvironmentVariable('OLLAMA_NOPRUNE', 'true', 'User')
+```
+
+What each does:
+- `FLASH_ATTENTION=1` — Uses flash attention to reduce VRAM usage during inference
+- `KV_CACHE_TYPE=q8_0` — Quantizes the KV cache from f16 to q8_0, halving cache memory
+- `MAX_LOADED_MODELS=1` — Only keeps 1 model in memory at a time (prevents OOM)
+- `NUM_PARALLEL=1` — Single request at a time (less memory per request)
+- `NUM_CTX=4096` — Limits context window (smaller = less KV cache memory)
+- `KEEP_ALIVE=10m` — Unloads model after 10 min idle (frees VRAM)
+- `NOPRUNE=true` — Prevents auto-cleanup of model blobs
+
+**Verify after setting**: `reg query HKCU\Environment` should show all Ollama vars.
