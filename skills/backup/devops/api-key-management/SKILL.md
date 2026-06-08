@@ -115,6 +115,78 @@ Bot tokens (Telegram, Discord, Signal, etc.) are also API secrets and follow the
 
 **Key difference from API keys**: Bot tokens don't go in the encrypted vault — they live in .env where the gateway reads them directly. But the conversational workflow is the same: user gives you the token, you handle storage, verification, and activation.
 
+## Provider Health Audit & Cleanup
+
+Periodically test all configured Hermes providers for invalid/expired keys. Full workflow:
+
+### 1. Direct curl Testing (bypasses Hermes)
+
+cc-switch health checks can give false positives. Always verify with direct curl:
+
+```bash
+# OpenRouter
+curl -s -w "\nHTTP %{http_code}" https://openrouter.ai/api/v1/models \
+  -H "Authorization: Bearer $KEY"
+
+# DeepSeek
+curl -s -w "\nHTTP %{http_code}" https://api.deepseek.com/models \
+  -H "Authorization: Bearer $KEY"
+# Expected: HTTP 200 on success, HTTP 401 if expired/invalid
+
+# Gemini (query-param auth, v1 endpoint)
+curl -s -w "\nHTTP %{http_code}" "https://generativelanguage.googleapis.com/v1/models?key=$KEY"
+```
+
+**DeepSeek 401 detection**: Returns `{"error":{"message":"Authentication Fails, Your api key: ****xxxx is invalid","type":"authentication_error"}}` with HTTP 401 when the key is expired/revoked.
+
+### 2. Remove Expired Key from Hermes Config
+
+```bash
+hermes config set providers.<provider> null
+```
+
+This sets the provider to null — the config entry remains but is unusable. No CLI delete command exists; `null` is functionally inert.
+
+### 3. Clean Up cc-switch DB (Windows SQLite)
+
+The cc-switch database at `/mnt/c/Users/<user>/.cc-switch/cc-switch.db` has two tables that accumulate stale entries:
+
+```python
+import sqlite3
+conn = sqlite3.connect('/mnt/c/Users/ysga1/.cc-switch/cc-switch.db')
+c = conn.cursor()
+
+# Check for orphaned provider_endpoints (entries whose provider_id doesn't match any active provider)
+c.execute('''SELECT pe.* FROM provider_endpoints pe
+             LEFT JOIN providers p ON pe.provider_id = p.id AND pe.app_type = p.app_type
+             WHERE p.id IS NULL''')
+
+# Delete orphaned endpoints
+c.execute('''DELETE FROM provider_endpoints WHERE provider_id IN (
+             SELECT pe.provider_id FROM provider_endpoints pe
+             LEFT JOIN providers p ON pe.provider_id = p.id AND pe.app_type = p.app_type
+             WHERE p.id IS NULL)''')
+conn.commit()
+```
+
+**Common orphan pattern**: Provider ID typo (e.g. `oogle-gemini` instead of `google-gemini`) leaves a stale `provider_endpoints` row after the provider is created with the correct name. The `stream_check_logs` table will show failed checks against the typo'd ID.
+
+### 4. Verify After Cleanup
+
+```bash
+grep -A 15 "^providers:" ~/.hermes/config.yaml
+```
+
+Check that only valid providers remain. For cc-switch, re-read the providers and provider_endpoints tables to confirm.
+
+### Provider Health Check Summary Template
+
+| Provider | Endpoint Test | HTTP Status | Key Valid? |
+|----------|-------------|-------------|------------|
+| OpenRouter | `openrouter.ai/api/v1/models` | 200 | ✅ |
+| DeepSeek | `api.deepseek.com/models` | 200 / 401 | ✅ / ❌ |
+| Google Gemini | `generativelanguage.googleapis.com/v1/models?key=` | 200 | ✅ |
+
 ## Pitfalls
 
 - **Master password is irrecoverable.** No backdoor. If forgotten, delete `_keys/vault.enc` and re-initialize.

@@ -53,13 +53,18 @@ curl -L -o /mnt/c/Users/<user>/Downloads/file.exe "<download-url>"
 
 ## Launching Windows GUI from WSL
 
-### ✅ PowerShell Start-Process (works)
+### ✅ PowerShell Start-Process (works — this is the ONLY reliable method)
 
 ```bash
 powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "Start-Process '<path-to-exe>'"
 ```
 
-Key: Use `-NoProfile` and no extra wrappers. The process launches asynchronously — the PowerShell exits instantly.
+Key rules:
+- Use **`-NoProfile`** and **no extra wrappers** — no `& { }`, no `-File`, no script blocks
+- The process launches asynchronously — PowerShell exits instantly, WSL returns `exit 0`
+- Verify the process started: `powershell.exe -NoProfile -Command "Get-Process <name>"`
+
+**Contrast with what DOES NOT work** (see below): the difference is that `Start-Process` with bare args exits immediately, while wrappers like `& { ... }` or `-File script.ps1` cause the WSL→PowerShell bridge to hang.
 
 ### ❌ What DOES NOT work
 
@@ -190,3 +195,13 @@ Windows Defender/Security may intercept bulk deletion on `/mnt/c/` from WSL. If 
 ### Pitfall 5: Syncthing file versioning not configured by default
 
 If the `<versioning>` section in `config.xml` has no `type` attribute, there is NO versioned backup. Users must enable "File Versioning" in Syncthing settings to protect against deletion propagation.
+
+### Pitfall 6: Windows environment variable changes don't apply to running processes
+
+When you change a Windows environment variable via `powershell.exe -Command "[System.Environment]::SetEnvironmentVariable(...)"`, the change is written to the registry but does NOT take effect for already-running processes. Any .exe launched from WSL inherits the environment from when WSL (or that process) was spawned.
+
+**Fix**: After changing an env var, you must either:
+1. Kill and restart the target process, OR
+2. Override the var inline when launching: `cmd.exe /c "set VAR=value && program.exe"`
+
+**Example**: Ollama's `OLLAMA_MODELS` pointing to a non-existent path causes server crashes. Changing the registry value requires restarting Ollama.

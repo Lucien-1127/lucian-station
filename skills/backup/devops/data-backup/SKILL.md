@@ -113,18 +113,24 @@ Best tool for non-technical users. Free version supports deep scan.
 **Installation:**
 ```powershell
 # Via winget (preferred — works from WSL cmd.exe)
-winget install --id Piriform.Recuva
+winget install --id Piriform.Recuva --accept-package-agreements
 ```
 
-**Launch** (from WSL — may not work for GUI apps):
+**Launch** (from WSL — confirmed working):
 ```powershell
-Start-Process 'C:\Program Files\Recuva\recuva.exe'
+powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "Start-Process 'C:\Program Files\Recuva\recuva64.exe'"
 ```
+Key: use `-NoProfile` and bare `Start-Process` with **no** `& { }` wrapper, no `-File` flag. PowerShell exits instantly; the GUI opens on Windows.
 
-**If launch fails from WSL**, create a desktop shortcut:
-- WSL cannot directly launch Windows GUI apps reliably
-- `Start-Process`, `cmd.exe /c start`, `explorer.exe`, `wscript.exe` all may fail
-- Tell user to run Recuva manually from Start Menu
+**If launch fails:**
+1. Verify install path: `Get-ChildItem 'C:\Program Files\Recuva\'`
+2. Try `recuva64.exe` (64-bit) vs `recuva.exe` (32-bit)
+3. Last resort: create a `.bat` on Desktop: `start "" "C:\Program Files\Recuva\recuva64.exe"`
+
+**Do NOT attempt from WSL:**
+- `cmd.exe /c start "..."` — hangs with path encoding
+- `explorer.exe "..."` — timeout
+- `wscript.exe` Shell.Application — hangs
 
 **Recuva Recovery Steps:**
 1. File type: "All Files"
