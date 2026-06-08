@@ -205,3 +205,5 @@ When you change a Windows environment variable via `powershell.exe -Command "[Sy
 2. Override the var inline when launching: `cmd.exe /c "set VAR=value && program.exe"`
 
 **Example**: Ollama's `OLLAMA_MODELS` pointing to a non-existent path causes server crashes. Changing the registry value requires restarting Ollama.
+
+→ For full Ollama model management (import, delete, GGUF workflow), load the **`local-llm-ops`** skill.
