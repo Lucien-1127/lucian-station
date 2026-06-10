@@ -236,6 +236,33 @@ Key details:
 - Multiple windows / complex UI
 - Cross-platform support needed
 
+## HTA Implementation Patterns (for reference)
+
+If you still choose HTA despite the pitfalls, here are the key patterns:
+
+### Common Launch Patterns
+
+| Target | Pattern |
+|--------|---------|
+| Windows CLI tool | `sh.Run('%COMSPEC% /k "' + path + '"', 1, false)` |
+| Windows GUI app | `sh.Run('"' + path + '"', 1, false)` |
+| WSL tool (CLI) | `sh.Run('wsl.exe -e hermes', 1, false)` |
+| Protocol URI | `sh.Run("obsidian://open?vault=知識庫", 0, false)` |
+
+Note: `1` = SW_SHOWNORMAL, `0` = SW_HIDE, `false` = don't wait.
+
+### Handling `.lnk` Shortcut Targets
+```powershell
+powershell.exe -Command "$sh = New-Object -ComObject WScript.Shell; $sc = $sh.CreateShortcut('C:\path\file.lnk'); Write-Host $sc.TargetPath $sc.Arguments"
+```
+
+### Google Cloud SDK Launch
+Do NOT run `gcloud.cmd` directly — use `cloud_env.bat`:
+```javascript
+var env = home() + "\\AppData\\Local\\Google\\Cloud SDK\\cloud_env.bat";
+sh.Run('%COMSPEC% /k ""' + env + '""', 1, false);
+```
+
 ## References & Templates
 
 - `references/hta-failures-2026-06-06.md` — Transcript of HTA rendering failure and debugging steps

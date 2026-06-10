@@ -181,6 +181,61 @@ ollama ps
 
 Shows `size_vram` per loaded model, useful for confirming GPU offload percentage.
 
+## Gemma 4 Thinking Mode
+
+Gemma 4 models (including uncensored variants) have a built-in "thinking" mode where the model shows its internal reasoning process before answering. This is controlled via the API, not the Modelfile.
+
+### Detecting Thinking Mode
+
+When thinking is enabled, the chat API returns a `thinking` field alongside `content`:
+```json
+{
+  "message": {
+    "role": "assistant",
+    "content": "",
+    "thinking": "Here's a thinking process that leads to the suggested response..."
+  }
+}
+```
+
+If `content` is empty but tokens were generated, thinking is likely active.
+
+### Disabling Thinking (Recommended for Speed)
+
+Use the chat API with `think: false`:
+```bash
+curl -s http://localhost:11434/api/chat -d '{
+  "model": "your-gemma4-model",
+  "messages": [{"role": "user", "content": "hello"}],
+  "stream": false,
+  "think": false
+}'
+```
+
+In `ollama run`, set it interactively:
+```
+/set parameter think false
+```
+
+### Enabling Thinking
+
+Same but with `think: true`. Useful for complex reasoning tasks.
+
+### Modelfile Limitation
+
+The `think` parameter is **NOT supported** in Modelfiles. You cannot bake `think: false` into a custom model. The thinking mode is controlled at runtime via the API or interactive session.
+
+**Pitfall**: Creating a Modelfile with `PARAMETER think false` will fail with `Error: unknown parameter 'think'`.
+
+### Thinking vs No-Thinking Performance
+
+| Mode | Prompt tok/s | Generate tok/s | Notes |
+|------|-------------|----------------|-------|
+| think: true | ~80 | ~21 | Thinking tokens consume budget before answer |
+| think: false | ~80 | ~21 | Faster time-to-first-token, same gen speed |
+
+The generation speed is similar, but `think: false` gets to the actual answer faster because it doesn't waste tokens on reasoning.
+
 ## Pitfalls
 
 ### Pitfall 1: Ollama CLI from WSL tries to start server

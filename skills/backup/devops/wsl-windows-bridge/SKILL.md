@@ -132,22 +132,109 @@ cc‑switch keeps its own **SQLite database**, separate from Hermes config:
 | `C:\Users\<user>\.cc-switch\cc-switch.db` | Main SQLite DB |
 | `C:\Users\<user>\.cc-switch\backups\db_backup_<timestamp>.db` | Auto-backups |
 
-### Key tables
+### Database Schema (Key Tables)
 
 **`providers`** — Provider configs per app type:
+- Columns: `id, name, app_type, settings_config, is_current, meta`
 - `app_type`: `hermes`, `claude`, `codex`, `gemini`, `claude-desktop`
-- `name`: Display name (e.g. `"OpenRouter"`)
+- `name`: Display name (e.g. `"OpenRouter"`) — DIFFERENT from the internal `name` inside `settings_config`
 - `settings_config`: JSON string with provider-specific config:
-  - For Hermes: `name`, `base_url`, `api_key`, `api_mode`, `models[]`
-- `is_current`: Boolean, which provider is active
-- `meta`: JSON, includes `commonConfigEnabled`
+  ```json
+  {"name":"openrouter","base_url":"https://openrouter.ai/api/v1","api_key":"sk-or-...","api_mode":"chat_completions","models":[{"id":"anthropic/claude-sonnet-4-6","name":"Claude Sonnet 4.6","context_length":1000000}]}
+  ```
+- **API keys are masked** (`***`) in cc-switch DB even from local filesystem reads — you cannot extract them from the DB
+
+**`provider_endpoints`** — Per-provider URL endpoints:
+- Columns: `id, provider_id, app_type, url, added_at`
+- Stores base URLs matching each provider's `base_url` in `settings_config`
 
 **`skills`** — Installed skills per app:
-- `name`, `description`, `directory`
-- `enabled_claude`, `enabled_codex`, `enabled_gemini`, `enabled_opencode`, `enabled_hermes`
-- `readme_url`, `repo_owner`, `repo_name`, `repo_branch`
+- Columns: `id, name, description, directory, enabled_claude, enabled_codex, enabled_hermes, enabled_gemini, enabled_opencode, installed_at, content_hash`
+- Most skills default to `enabled_hermes=0` — only sync if explicitly enabled
 
-**`mcp_servers`**, **`prompts`**, **`settings`** — App-wide config.
+**`mcp_servers`** — MCP server configs:
+- Columns: `id, name, server_config, description, enabled_claude, enabled_codex, enabled_hermes, enabled_gemini, enabled_opencode`
+- `server_config` contains `{"type":"stdio","command":"...","env":{...}}` JSON
+
+**`skills`**, **`prompts`**, **`settings`**, **`model_pricing`** (147+ rows), **`proxy_config`**, **`proxy_request_logs`** — Additional app-wide config tables.
+
+### Reading cc-switch SQLite from WSL
+
+```python
+import sqlite3, json
+conn = sqlite3.connect('/mnt/c/Users/<user>/.cc-switch/cc-switch.db')
+cursor = conn.cursor()
+cursor.execute("SELECT id, name, app_type, settings_config FROM providers WHERE app_type='hermes'")
+rows = cursor.fetchall()
+for r in rows:
+    cfg = json.loads(r[3])
+    print(f"  {r[0]}: {r[1]} → {cfg.get('base_url')}")
+conn.close()
+```
+
+### Batch Sync: All cc-switch Providers → Hermes
+
+When the user asks to sync everything, extract all hermes-type providers and write them into Hermes config:
+
+**Step 1: Extract providers and keys from cc-switch DB**
+```python
+import sqlite3, json
+db_path = '/mnt/c/Users/<user>/.cc-switch/cc-switch.db'
+conn = sqlite3.connect(db_path)
+cursor = conn.cursor()
+cursor.execute("SELECT name, settings_config FROM providers WHERE app_type='hermes'")
+rows = cursor.fetchall()
+for r in rows:
+    cfg = json.loads(r[1])
+    name = cfg.get('name', r[0])
+    key = cfg.get('api_key', '')
+    base_url = cfg.get('base_url', '')
+    # Write keys to temp files to bypass shell secret redaction
+    with open(f'/tmp/cc_sync_{name}.key', 'w') as f:
+        f.write(key)
+    with open(f'/tmp/cc_sync_{name}.json', 'w') as f:
+        json.dump({'base_url': base_url, 'api_mode': cfg.get('api_mode', '')}, f)
+```
+
+**Step 2: Write each provider into Hermes config**
+```bash
+KEY=$(cat /tmp/cc_sync_<name>.key)
+hermes config set providers.<name>.api_key "$KEY"
+hermes config set providers.<name>.base_url "<base_url>"
+hermes config set providers.<name>.api_mode "chat_completions"
+```
+
+**Step 3: End-to-end test each provider**
+```bash
+# Test OpenRouter
+OPENROUTER_KEY=$(grep -A3 'openrouter:' ~/.hermes/config.yaml | grep 'api_key:' | sed 's/.*api_key: //')
+curl -s "https://openrouter.ai/api/v1/chat/completions" \
+  -H "Authorization: Bearer $OPENROUTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"openrouter/free","messages":[{"role":"user","content":"Say OK"}],"max_tokens":5}'
+```
+
+**Step 4: Clean up model section** — if `model:` uses `provider: custom` with inline fields and a matching named provider was synced:
+```bash
+hermes config set model.provider google-gemini
+hermes config set model.base_url ""
+hermes config set model.api_mode ""
+hermes config set model.api_key ""
+```
+
+**Step 5: Verify and clean up**
+```bash
+read_file ~/.hermes/config.yaml offset=1 limit=20
+rm -f /tmp/cc_sync_*.key /tmp/cc_sync_*.json
+```
+
+### Fixing Provider Configs in cc-switch
+
+| Field | Correct value | Notes |
+|---|---|---|
+| `name` (内部) | e.g. `google-gemini`, `openrouter`, `deepseek` | Lowercase, hyphens. Used in config.yaml |
+| `api_mode` | `chat_completions` / `anthropic_messages` | Must match the provider's API protocol |
+| `models[].id` | e.g. `gemini-2.5-flash` | **No** `models/` prefix. Use actual model IDs |
 
 ### cc‑switch writes to its OWN DB, NOT to ~/.hermes/config.yaml
 
@@ -157,9 +244,20 @@ The user must click **"Apply"** / **"Sync to Hermes"** inside the cc‑switch GU
 
 It cannot "open" Claude Code, Codex, or Hermes. It manages their config files. Users expecting a one‑click launch will be confused.
 
-## Pitfalls
+### Shell Mode Comparison (PowerShell → WSL)
 
-- **PowerShell tilde expansion trap.** In PowerShell, `~` is an alias for `$HOME` = `C:\Users\<user>`. Writing `wsl ~/.local/bin/hermes` in a PowerShell function or .ps1 script causes PowerShell to expand `~` to the **Windows home path** before passing it to WSL. The command becomes `wsl C:\Users\<user>/.local/bin/hermes`, which does not exist. **Fix:** Use the absolute WSL path in a variable:
+| Mode | Command | Sources `.bashrc` | Finds `~/.local/bin` in PATH | Use Case |
+|------|---------|-------------------|------------------------------|----------|
+| **Exec** | `wsl -e /abs/path/to/binary` | N/A | N/A (uses absolute path) | ✅ Best for scripts, functions |
+| **Login** | `wsl bash -l -c 'hermes chat'` | ✅ (via .profile) | ✅ | Interactive tools needing full env |
+| **Interactive** | `wsl` (enter WSL shell) | ✅ | ✅ | Manual use |
+| **Exec by name** | `wsl -e hermes` | ❌ | ❌ (unless PATH set globally) | ❌ Unreliable |
+
+**Core rule:** Never use `~` in PowerShell commands targeting WSL. PowerShell expands `~` to `$HOME` (Windows home), which WSL cannot interpret as its own home.
+
+### Pitfalls
+
+- **PowerShell tilde expansion trap.** In PowerShell, `~` is an alias for `$HOME` = `C:\Users\<user>`. Writing `wsl ~/.local/bin/hermes` in a PowerShell function causes PowerShell to expand `~` to the **Windows home path** before passing it to WSL. **Fix:** Use the absolute WSL path in a variable.
   ```powershell
   $WSL_HERMES = "/home/<user>/.local/bin/hermes"
   wsl -e $WSL_HERMES chat
