@@ -2,8 +2,8 @@
 name: local-llm-ops
 title: Local LLM Operations (Ollama)
 description: "Manage Ollama local LLMs from WSL: list/delete/run models, import GGUF from HuggingFace via Modelfile, fix model path issues. Covers the WSL→Windows bridge for Ollama CLI/API."
-version: 1.0.0
-trigger: "User asks about Ollama models, downloading GGUF, importing local models, checking what models are installed, or fixing Ollama path/server issues."
+version: 1.1.0
+trigger: "User asks about Ollama models, downloading GGUF, importing local models, checking what models are installed, fixing Ollama path/server issues, connecting from phone/tablet, or making Ollama accessible from LAN."
 tags: [ollama, gguf, local-llm, mlops, wsl]
 platforms: [wsl, linux]
 ---
@@ -327,6 +327,44 @@ FROM ./model.gguf
 PROJECTOR ./mmproj.gguf
 ```
 Not all Ollama versions support PROJECTOR — check `ollama --help`.
+
+## Making Ollama Accessible from LAN (Phone/Tablet)
+
+When you want to connect from a phone Ollama app to models running on your Windows host:
+
+### 1. Set OLLAMA_HOST=0.0.0.0
+
+Default Windows Ollama binds to `127.0.0.1` (local only). To allow LAN connections:
+
+```bash
+# Kill all Ollama processes first
+cmd.exe /c "taskkill /IM ollama.exe /F"
+
+# Set persistent user-level env var (no admin needed)
+cmd.exe /c "setx OLLAMA_HOST 0.0.0.0"
+```
+
+Then restart Ollama. Verify with `netstat -ano | findstr :11434` — look for `0.0.0.0:11434` or `[::]:11434`.
+
+### 2. Windows Firewall (if phone can't connect)
+
+Needs **Administrator** PowerShell:
+```powershell
+netsh advfirewall firewall add rule name="Ollama" dir=in action=allow protocol=TCP localport=11434
+```
+
+### 3. Connection Info for Mobile
+
+| Field     | Value                                                |
+|-----------|------------------------------------------------------|
+| **Host**  | Windows LAN IP (from `ipconfig`)                     |
+| **Port**  | `11434`                                              |
+| **SSL**   | Off                                                  |
+| **API Key** | (blank — Ollama has no auth by default)            |
+
+### Pitfall: Two Ollama Processes on Different Bindings
+
+Ollama GUI tray auto-starts on `127.0.0.1:11434`. Starting a second instance with `OLLAMA_HOST=0.0.0.0` creates two processes — the first handles local apps, the second serves LAN. This is fine, but for a clean restart: `taskkill /IM ollama.exe /F`.
 
 ## GPU Optimization (Permanent Env Vars)
 
