@@ -2,7 +2,7 @@
 name: local-llm-ops
 title: Local LLM Operations (Ollama)
 description: "Manage Ollama local LLMs from WSL: list/delete/run models, import GGUF from HuggingFace via Modelfile, fix model path issues. Covers the WSL→Windows bridge for Ollama CLI/API."
-version: 1.1.0
+version: 1.2.0
 trigger: "User asks about Ollama models, downloading GGUF, importing local models, checking what models are installed, fixing Ollama path/server issues, connecting from phone/tablet, or making Ollama accessible from LAN."
 tags: [ollama, gguf, local-llm, mlops, wsl]
 platforms: [wsl, linux]
@@ -355,16 +355,54 @@ netsh advfirewall firewall add rule name="Ollama" dir=in action=allow protocol=T
 
 ### 3. Connection Info for Mobile
 
-| Field     | Value                                                |
-|-----------|------------------------------------------------------|
-| **Host**  | Windows LAN IP (from `ipconfig`)                     |
-| **Port**  | `11434`                                              |
-| **SSL**   | Off                                                  |
-| **API Key** | (blank — Ollama has no auth by default)            |
+| Field       | Value                                                |
+|-------------|------------------------------------------------------|
+| **Host**    | Windows LAN IP (from `ipconfig`)                     |
+| **Port**    | `11434`                                              |
+| **SSL**     | Off                                                  |
+| **API Key** | (blank — Ollama has no auth by default)              |
+
+### 4. Diagnosing Connection Issues
+
+From **WSL**, the Ollama server is always reachable on `localhost:11434`:
+```bash
+curl -s http://localhost:11434/api/tags
+```
+
+From **external devices** (phone), verify the server is listening on all interfaces:
+```bash
+cmd.exe /c "netstat -ano | findstr :11434"
+```
+Look for `0.0.0.0:11434` or `[::]:11434` — if only `127.0.0.1:11434` shows, OLLAMA_HOST was not applied.
+
+**Symptom**: Windows Firewall blocking. Phone connects then times out, or from WSL `nc -zv <LAN_IP> 11434` returns `Connection refused` while `localhost:11434` works fine.
+
+**Fix**: Requires **Administrator** — without it, no tool from WSL can bypass the firewall:
+```powershell
+netsh advfirewall firewall add rule name="Ollama" dir=in action=allow protocol=TCP localport=11434
+```
+
+**What DOES NOT work (confirmed dead ends):**
+- Cloudflare TryCloudflare tunnel (`cloudflared tunnel --url http://localhost:11434`) → Cloudflare WAF returns HTTP 403 on any /api/* path
+- localhost.run SSH tunnel (`ssh -R 80:localhost:11434 nokey@localhost.run`) → Reverse proxy returns 403 on API traffic
+- `netsh interface portproxy` → requires admin
+- WSL socat/port-forward → WSL has a different NAT subnet (172.20.x.x), phone on Windows LAN cannot reach WSL IPs
+
+**Alternatives that work without admin:**
+- **Tailscale** (free, no admin install) — mesh VPN, completely bypasses Windows Firewall
+- **Enchanted iOS App** (App Store) — may trigger Windows firewall popup on first attempt; user can click "Allow"
 
 ### Pitfall: Two Ollama Processes on Different Bindings
 
 Ollama GUI tray auto-starts on `127.0.0.1:11434`. Starting a second instance with `OLLAMA_HOST=0.0.0.0` creates two processes — the first handles local apps, the second serves LAN. This is fine, but for a clean restart: `taskkill /IM ollama.exe /F`.
+
+### Pitfall: Phone Connected to Its Own Hotspot
+
+When the Windows PC is connected to the phone's mobile hotspot, the phone is the gateway (e.g. `10.114.205.161`). The Windows PC gets an IP in the same subnet (e.g. `10.114.205.137`). **WSL has its own NAT subnet** (e.g. `172.20.10.x`) — the phone cannot reach WSL IPs directly. Any listener in WSL must be accessed through the Windows LAN IP.
+
+### Pitfall: Tunnel Services Block API Traffic
+
+Free reverse tunnel services (cloudflared TryCloudflare, localhost.run, serveo.net) are designed for **web page traffic**, not Ollama's REST API. Their WAF/proxy layers return HTTP 403 for non-browser API calls. Do not recommend these for Ollama LAN access — they waste time on a dead end.
 
 ## GPU Optimization (Permanent Env Vars)
 
