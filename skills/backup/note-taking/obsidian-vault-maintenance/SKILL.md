@@ -1,7 +1,7 @@
 ---
 name: obsidian-vault-maintenance
 description: Audit and restructure Obsidian vaults — batch frontmatter injection, orphan-link resolution, cross-note wikilink healing, and index/MOC generation. Use when the user wants to clean up, reorganize, or audit their vault's structural integrity.
-version: 2.2.0
+version: 2.3.0
 author: 小育 (via agent)
 license: MIT
 metadata:
@@ -128,6 +128,65 @@ This copies everything (including hidden `.obsidian/`) but preserves any files a
 - [ ] Template files referenced in plugin configs actually exist at the expected paths
 - [ ] The homepage (`🏠 知識庫首頁.md` or similar) is present
 - [ ] Note count matches expectations (compare with backup file count)
+
+### Vault Merging
+
+Merging two copies of the same vault (e.g., merging a restored backup into the live vault, or merging two devices' copies). This is **not** the same as Phase E's intra-vault dedup — we're combining two complete vault populations where most files overlap.
+
+#### Identification
+
+Signals to look for:
+- User says "把其他地方散落的知識庫都合併到這"
+- You know of a second vault directory with similar content
+- A restored backup needs its unique files folded into the live vault
+- Two copies of a vault diverged due to Syncthing issues
+
+#### Strategy: rsync --ignore-existing
+
+The safest one-way merge uses `rsync --ignore-existing` — it copies files from source to destination ONLY if they don't already exist at the destination:
+
+```bash
+SRC="/path/to/source/vault/知識庫"
+DST="/path/to/dest/vault/知識庫"
+
+# Preview: what's new in source that dest doesn't have?
+cd "$SRC"
+find . -type f | while read f; do
+  if [ ! -f "$DST/$f" ]; then
+    echo "  NEW: $f"
+  fi
+done | head -30
+
+# Execute merge (no overwrite)
+rsync -av --ignore-existing "$SRC/" "$DST/"
+```
+
+**Count-check after merge:**
+```bash
+echo "Source: $(find "$SRC" -name '*.md' -type f | wc -l)"
+echo "Dest:   $(find "$DST" -name '*.md' -type f | wc -l)"
+```
+
+After merging, both vaults should converge to the same total (assuming the merge was one-way from the larger to the smaller).
+
+#### Bidirectional Merge (Sync After Merge)
+
+If you want both vaults to be equal after the merge, run the reverse direction too:
+
+```bash
+# After SRC→DST, also run DST→SRC so both vaults are identical
+rsync -av --ignore-existing "$DST/" "$SRC/"
+```
+
+This ensures the source vault also gains any files the destination had that source didn't (e.g., newly created Dataview dashboards, maintenance records).
+
+#### Pitfalls
+
+1. **Which vault is authoritative?** Bi-directional rsync (`sendreceive` pattern) works when both vaults started from the same backup. If one has user-generated content the other doesn't, run src→dst first, then dst→src.
+2. **Conflicting .obsidian config** — Do NOT merge `.obsidian/` between vaults. Each vault has its own plugin config, theme, and workspace. The rsync command above targets `知識庫/` (notes subdirectory), not the vault root.
+3. **Orphaned directories in source** — The source vault may have dustbin directories (e.g., `智研AI法律/` without emoji prefix alongside the canonical `⚖️智研AI法律/`). These get copied as new folders, inflating the dest vault. Either clean them from source first, or do a post-merge dedup pass.
+4. **Git status after merge** — Merging adds files. Run `git add -A && git commit -m "📚 merge from <source>"` afterward so Git tracks the additions.
+5. **Inbox consolidation** — If both vaults have a `☁️收件夾/`, merge them manually: `cp -n "$SRC_INBOX/"* "$DST_INBOX/"`. There's no automatic dedup by content; duplicates will just appear twice. Let the user sort them.
 
 ### Git Init (for Obsidian Git plugin)
 
@@ -458,6 +517,33 @@ If the Obsidian vault is synced with Syncthing (look for `.stfolder` in the vaul
 4. **Pause Syncthing during maintenance** — Before running any bulk rename/merge operation, tell the user to pause Syncthing on ALL connected devices. Resume only after the vault is stable.
 5. **Sendreceive is dangerous** — Two-way sync means deletions on any connected device propagate everywhere. Prefer `sendonly` (primary) + `receiveonly` (secondary) for mission-critical vaults.
 6. **Fresh VMs wipe data** — Never connect a new VM instance in sendreceive mode to a folder that already has data. The VM's empty state overwrites the local data.
+
+### `.stfolder` Recovery (Critical)
+
+The `.stfolder` marker file tells Syncthing which directories are synced folders. If it's accidentally deleted (e.g., during vault cleanup), Syncthing stops recognizing the vault and will NOT sync any changes — potentially causing data loss on remote devices.
+
+**Detection:**
+```bash
+find "$VAULT" -name ".stfolder" -maxdepth 1 2>/dev/null || echo "MISSING — Syncthing will not sync this folder"
+```
+
+**Recovery:**
+```bash
+mkdir -p "$VAULT/.stfolder"
+```
+
+**Do NOT add `.stfolder` to `.stignore`.** Each SyncThing device creates its own local `.stfolder` marker — it is NEVER synced between devices. Adding it to `.stignore` would prevent the local marker from being detected.
+
+**Nested vault issue:** If a backup restoration created an inner `知識庫/.stfolder/` alongside the root `.stfolder/`, Syncthing may treat the inner folder as a separate sync target. Remove the inner one:
+```bash
+rm -rf "$VAULT/知識庫/.stfolder"   # only remove the INNER one
+```
+
+**Post-recovery verification:**
+```bash
+# SyncThing should show the folder as "Up to Date" again
+cat /mnt/c/Users/$USER/AppData/Local/Syncthing/syncthing.log | grep -i "folder.*obsidian" | tail -5
+```
 
 See `data-backup` skill for full Syncthing disaster recovery workflow.
 
@@ -866,9 +952,22 @@ If the vault uses Syncthing (detect by `.stfolder` in vault root), create `.stig
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/cache/
-知識庫/copilot/copilot-conversations/
-.stfolder
-.stignore
+copilot/copilot-conversations/
+```
+
+**CRITICAL: Do NOT add `.stfolder` or `.stignore` to `.stignore`.** Each Syncthing device creates its own local `.stfolder` marker — adding it to `.stignore` would prevent the folder from being detected. The `.stignore` file is also per-device and should never be excluded.
+
+**Syncthing folder path migration:** If the vault's folder path changed in Syncthing's config (e.g., after merging vaults), update `config.xml`:
+```bash
+# Stop syncthing first (Windows)
+cmd.exe /c "taskkill /f /im syncthing.exe"
+
+# Edit config.xml to point to the new path
+# C:\Users\%USERNAME%\AppData\Local\Syncthing\config.xml
+# Change: path="C:\Old\Path" → path="C:\New\Path"
+
+# Restart Syncthing
+cmd.exe /c "start /B C:\Users\%USERNAME%\AppData\Local\Syncthing\syncthing.exe --no-browser"
 ```
 
 **Nested vault cleanup:** Backups may create `知識庫/知識庫/.obsidian/` with its own plugin folders (17MB+). Remove it — Obsidian reads only the vault root. An inner `.stfolder` also causes SyncThing issues.
@@ -893,8 +992,190 @@ git init && git add -A && git commit -m "🎉 vault init"
 
 No remote needed — Git saves local version history (auto-commit every 30s).
 
-### Verification After Phase F
+### Phase G — Copilot Prompt Management
 
+After the vault is structurally clean and plugins are configured, manage the Obsidian Copilot plugin's custom prompts. Copilot keeps its prompts in the vault's `copilot/copilot-custom-prompts/` directory — each `.md` file is one slash command.
+
+### When to Use
+
+- User says 「Copilot 提示詞整理」「合併提示詞」「重複提示詞」
+- You notice two `copilot/` directories in the vault (root + inner 知識庫/copilot)
+- The prompt list has grown large and contains duplicate or near-identical entries
+
+### Identify Duplicate Copilot Directories
+
+After vault restoration from backup, the vault may have TWO copilot directories:
+
+```bash
+VAULT="/path/to/vault"
+echo "Root copilot: $(find \"$VAULT/copilot\" -type f | wc -l) files"
+echo "Inner copilot: $(find \"$VAULT/知識庫/copilot\" -type f | wc -l) files"
+```
+
+Common split:
+| Location | Typical Content |
+|----------|----------------|
+| Root `copilot/` | English built-in prompts (Clip Web, Summarize, Emojify, etc.) + user templates + current conversations |
+| Inner `知識庫/copilot/` | User-created Chinese custom prompts (精準內容減量器, 極速三合一萃取器, etc.) + older conversations + system prompts |
+
+### Merge Strategy
+
+Merge inner → root using `rsync --ignore-existing`, then remove the inner:
+
+```bash
+rsync -av --ignore-existing "$INNER/copilot-custom-prompts/" "$ROOT/copilot-custom-prompts/"
+rsync -av --ignore-existing "$INNER/system-prompts/" "$ROOT/system-prompts/"
+rsync -av --ignore-existing "$INNER/copilot-conversations/" "$ROOT/copilot-conversations/"
+rsync -av --ignore-existing "$INNER/memory/" "$ROOT/memory/"
+cp -n "$INNER/copilot-custom-prompts.md" "$ROOT/"
+rm -rf "$INNER"
+```
+
+### Detect Redundant Prompts
+
+After merging, scan for pairs where an English built-in prompt and a Chinese custom prompt serve the same function. The user-created Chinese versions are usually more detailed and preferred.
+
+Common redundant pairs (EN → CN):
+
+| English Built-in (small, ~350-500B) | Chinese Custom (detailed, ~800-2400B) | Action |
+|--------------------------------------|----------------------------------------|--------|
+| Emojify.md | ✨ 視覺感官增強器 (Emoji 裝飾版).md | Delete EN |
+| Translate to Chinese.md | 🇹🇼 繁體中文在地化翻譯器.md | Delete EN |
+| Explain like I am 5.md | 🍭 幼兒級白話解釋器 + 🎒 知識普及化簡化器 | Delete EN |
+| Make shorter.md | ⚖️ 精準內容減量器 (50% 濃縮版).md | Delete EN |
+| Summarize.md | 📌 精煉內容核心摘要 / ⚡ 極速三合一萃取器 / 🧠 PKM 壓縮器 | Delete EN |
+| Remove URLs.md | 🧹 網址自動清除器.md | Delete EN |
+| Generate table of contents.md | 📑 階層式文件目錄產生器.md | Delete EN |
+| Generate glossary.md | 📖 關鍵術語與概念詞彙表.md | Delete EN |
+| Fix grammar and spelling.md | 📝 語法與格式精準校對器.md | Delete EN |
+| Make longer.md | 📝 內容深度擴充器 (2倍細節版).md | Delete EN |
+| Simplify.md | ⚖️ 精準內容減量器 / 🎒 知識普及化簡化器 | Delete EN |
+| Rewrite as tweet.md / thread.md | 📱 社群貼文轉化器 / 📸 FB_IG 系列貼文產生器 | Delete EN |
+| Clip Web Page.md | 🌐 Web Clipper 知識內化模板.md | Delete EN |
+
+**Verification before deleting:** Read a few lines of content to confirm the pair truly serves the same purpose. The frontmatter `copilot-command-context-menu-enabled` and `copilot-command-slash-enabled` fields indicate the command type.
+
+**Keep** prompts that have no Chinese equivalent (e.g., Clip YouTube Transcript.md — YouTube-specific template with title/description/channel frontmatter).
+
+### Post-Merge Verification
+
+```bash
+echo "Root copilot: $(find \"$VAULT/copilot\" -type f | wc -l) files"
+echo "custom-prompts: $(ls \"$VAULT/copilot/copilot-custom-prompts/\" | wc -l)"
+echo "system-prompts: $(ls \"$VAULT/copilot/system-prompts/\" | wc -l)"
+echo "conversations: $(ls \"$VAULT/copilot/copilot-conversations/\" | wc -l)"
+```
+
+### Update .stignore After Merge
+
+After removing the inner copilot directory, update `.stignore`:
+
+```bash
+cat > "$VAULT/.stignore" << 'STEOF'
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache/
+copilot/copilot-conversations/
+STEOF
+```
+
+### Pitfalls
+
+1. **Do NOT merge `.obsidian/`** from inner to root — each vault has its own plugin config.
+2. **Conversations folder grows large** — The `.stignore` already excludes `copilot-conversations/` from SyncThing. After merging, verify the path in `.stignore` matches the new location (`copilot/` not `知識庫/copilot/`).
+3. **Copilot plugin reads FROM vault root** — The plugin always uses `VAULT/copilot/`, NOT any subdirectory. Prompts in an inner `知識庫/copilot/` were likely unused. The merge makes them discoverable.
+4. **Commit after merge** — `git add -A && git commit -m "🔄 merge copilot directories + dedup prompts"`
+
+## Phase H — Template Optimization (Post-Audit)
+
+After creating or auditing templates (Phase D), optimize them for consistency with Metadata Menu and the vault's frontmatter conventions.
+
+### Step 1: Audit Current Template Frontmatter
+
+```bash
+TMPL="$VAULT/知識庫/🎛️模板"
+for f in "$TMPL"/*.md; do
+    echo "--- $(basename "$f") ---"
+    head -12 "$f"
+    echo
+done
+```
+
+### Step 2: Apply Consistent Fields Across All Templates
+
+Every template should include these standard fields for Metadata Menu compatibility:
+
+```yaml
+---
+title: <% tp.file.title %>
+aliases:           # ← ADD
+created: <% tp.date.now("YYYY-MM-DD") %>
+updated: <% tp.date.now("YYYY-MM-DD") %>
+status: draft      # or inbox / active / growing
+type: note         # or capture / learning / dev / moc / concept
+importance:        # ← ADD (Number, 1-5)
+topics: []         # ← ADD (YAML array)
+tags:
+  - tagname
+---
+```
+
+### Step 3: Fix Common Template Issues
+
+| Issue | Fix |
+|-------|-----|
+| `tags: [模板]` on general note template | Change to `tags: []` — the template should not self-tag |
+| Missing `aliases` | Add as first field after `title` — enables `[[wikilink|Display Name]]` |
+| Missing `importance` | Add — Metadata Menu expects this field |
+| Missing `topics` | Add as YAML array |
+| Inconsistent `type` values | Use controlled vocabulary: `note, capture, concept, agent-spec, learning, dev, growth, moc` |
+
+### Step 4: Add Domain-Specific Sections
+
+| Template Domain | Add Sections |
+|----------------|-------------|
+| Learning notes | 「核心概念」「重點整理」「實際應用」「參考來源」 |
+| Development notes | 「目標」「實作步驟」「技術筆記」「相關資源」 |
+| Inbox capture | 「原始內容」「初步判斷」「後續行動」「歸檔決策」 |
+| General notes | 「摘要」「重點」「延伸思考」「行動項目」 |
+
+### Pitfalls
+
+1. **`updated` in templates** — Set to the same as `created` initially. Linter overwrites on save if configured.
+2. **`aliases` empty syntax** — `aliases:` on its own line (no value) is valid YAML null → Obsidian ignores it.
+3. **Metadata Menu field types** — `importance` must be `type: Number`, `topics` must be `type: YAML` in Metadata Menu's `presetFields`.
+4. **Skip `updated` on capture templates** — Captures are one-shot; `updated` is meaningless.
+
+## Phase I — Plugin Recommendations
+
+After core plugins are configured (Phase F), recommend additional plugins. Present as a short table with clear reasons.
+
+### Recommendation Selection
+
+| Vault Characteristic | Recommended Plugins |
+|---------------------|-------------------|
+| Chinese content, many filenames | **Various Complements** (autocomplete [[ links) |
+| Legal/tech system diagrams | **Excalidraw** (hand-drawn style) |
+| 100+ tags needing management | **Tag Wrangler** (bulk rename/merge) |
+| Many long notes | **Note Refactor** (extract sections) |
+| Custom CSS just created | **Style Settings** (adjust CSS variables) |
+| Directory-based organization | **Folder Notes** (click folder → MOC) |
+
+### Format
+
+```markdown
+| Plugin | Why | When |
+|--------|-----|------|
+| Excalidraw | Hand-drawn diagrams | Vault has system docs |
+| Tag Wrangler | Bulk tag mgmt | 100+ tags |
+```
+
+Install from Obsidian: 設定 → 社群外掛 → 瀏覽 → install.
+
+### Verification checklist (Phase I)
+
+- [ ] Plugins installed via GitHub releases (manifest.json + main.js + styles.css in `.obsidian/plugins/<id>/`)
+- [ ] community-plugins.json updated with new plugin IDs
 - [ ] Linter fires on save (edit a note, save, confirm linter ran)
 - [ ] QuickAdd 4+ commands visible in Command Palette
 - [ ] Omnisearch opens results in new pane
@@ -905,6 +1186,65 @@ No remote needed — Git saves local version history (auto-commit every 30s).
 - [ ] CSS snippet is enabled in appearance.json and file exists at `.obsidian/snippets/<name>.css`
 - [ ] .stignore exists and excludes workspace/cache/copilot-conversations
 - [ ] No orphaned nested `.obsidian/` directories inside the vault
+
+### Plugin Installation from GitHub
+
+When the user says to install plugins (not just recommend), download the latest release from GitHub:
+
+```bash
+install_plugin() {
+  local id="$1"
+  local repo="$2"
+  local dir="$VAULT/.obsidian/plugins/$id"
+  
+  mkdir -p "$dir"
+  curl -sL "https://github.com/$repo/releases/latest/download/manifest.json" -o "$dir/manifest.json"
+  if [ ! -s "$dir/manifest.json" ]; then
+    curl -sL "https://raw.githubusercontent.com/$repo/main/manifest.json" -o "$dir/manifest.json"
+  fi
+  curl -sL "https://github.com/$repo/releases/latest/download/main.js" -o "$dir/main.js"
+  if [ ! -s "$dir/main.js" ]; then
+    curl -sL "https://raw.githubusercontent.com/$repo/main/main.js" -o "$dir/main.js"
+  fi
+  curl -sL "https://github.com/$repo/releases/latest/download/styles.css" -o "$dir/styles.css" 2>/dev/null
+}
+
+# Update community-plugins.json
+python3 -c "
+import json
+path = '$VAULT/.obsidian/community-plugins.json'
+with open(path) as f:
+    plugins = json.load(f)
+for new_id in ['obsidian-style-settings', 'obsidian-various-complements-plugin', 'note-refactor-obsidian', 'tag-wrangler']:
+    if new_id not in plugins:
+        plugins.append(new_id)
+with open(path, 'w') as f:
+    json.dump(plugins, f, indent=2)
+"
+```
+
+**Mobile-compatible plugins** (no heavy GPU/CPU requirements):
+- `obsidian-style-settings` (mgmeyers/obsidian-style-settings) — CSS variable adjustment
+- `obsidian-various-complements-plugin` (tadashi-aikawa/obsidian-various-complements-plugin) — [[ autocomplete, config below
+- `note-refactor-obsidian` (lynchjames/note-refactor-obsidian) — extract selection to new note
+- `tag-wrangler` (pjeby/tag-wrangler) — bulk tag management
+
+**Various Complements config** (optimized for Chinese content):
+```json
+{
+  "strategy": "default",
+  "matchStrategy": "prefix",
+  "matchMobile": true,
+  "minNumberOfCharactersTriggeringSearchMobile": 1,
+  "maxNumberOfSuggestions": 15,
+  "matchInternalLink": true,
+  "matchFrontmatter": true,
+  "matchTags": true,
+  "frontMatterComplementStrategy": "hybrid",
+  "fileComplementStrategy": "hybrid",
+  "aliasSuggestions": true
+}
+```
 
 ## Common Pitfalls (All Phases)
 
@@ -950,3 +1290,5 @@ No remote needed — Git saves local version history (auto-commit every 30s).
 | `references/session-20260524-template-frontmatter.md` | 2026-05-24 session: template creation and frontmatter conventions |
 | `references/session-20260523-optimization.md` | 2026-05-23 session: attribute fixing and tag unification |
 | `references/session-20260616-restore-and-plugin-config.md` | 2026-06-16 session: vault restoration from backup + plugin optimization with exact data.json values |
+| `references/session-20260616-vault-merge-and-path-correction.md` | 2026-06-16 session: vault merge (rsync --ignore-existing) + .stfolder recovery + vault path correction |
+| `references/session-20260616-plugin-install.md` | 2026-06-16 session: plugin installation + Syncthing config migration + .stignore fix |

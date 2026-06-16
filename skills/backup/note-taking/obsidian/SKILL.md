@@ -19,23 +19,31 @@ Use this skill for Obsidian vault work: reading, searching, creating, editing no
 
 Use a known or resolved vault path before calling file tools.
 
-**On Windows WSL, do NOT trust `OBSIDIAN_VAULT_PATH` from `.env` alone.** It may point to a backup directory, not the live vault. The most reliable source is Obsidian's own vault registry:
+**On Windows WSL, do NOT trust `OBSIDIAN_VAULT_PATH` from `.env` alone.** It may point to a backup directory, not the live vault. The only reliable source is Obsidian's own vault registry:
 
 ```bash
-# On Windows: check Obsidian's config for the active vault
-cmd.exe /c "type C:\Users\%USERNAME%\AppData\Roaming\obsidian\obsidian.json" 2>nul
-# Look for the entry with "open": true
+# Check Obsidian's official vault registry for the active vault
+cmd.exe /c "type C:\\Users\\%USERNAME%\\AppData\\Roaming\\obsidian\\obsidian.json" 2>nul
+# Look for the entry with "open": true — that's the currently active vault
 ```
 
-Resolution order:
-1. Obsidian's `obsidian.json` → `"open": true` vault (most reliable on Windows)
-2. `OBSIDIAN_VAULT_PATH` environment variable (verify it matches #1)
+Resolution order (most reliable first):
+1. **Obsidian's `obsidian.json`** → vault with `"open": true`
+2. `OBSIDIAN_VAULT_PATH` environment variable (verify it matches #1 before using)
 3. User's known vault path from memory
 4. Fallback: `~/Documents/Obsidian Vault`
 
+**Cross-check on WSL:**
+```bash
+# Example: if Windows vault is at C:\Users\ysga1\Documents\Lunian
+VAULT="/mnt/c/Users/ysga1/Documents/Lunian"
+# Verify: check for .obsidian directory
+test -d "$VAULT/.obsidian" && echo "VAULT CONFIRMED" || echo "NO .obsidian — wrong path"
+```
+
 File tools do not expand shell variables. Do not pass paths containing `$OBSIDIAN_VAULT_PATH` to `read_file`, `write_file`, `patch`, or `search_files`; resolve the vault path first and pass a concrete absolute path. Vault paths may contain spaces, which is another reason to prefer file tools over shell commands.
 
-If the vault path is unknown, `terminal` is acceptable for resolving `OBSIDIAN_VAULT_PATH` or checking whether the fallback path exists. Once the path is known, switch back to file tools.
+If the vault path is unknown, `terminal` is acceptable for resolving the path or checking whether the fallback path exists. Once the path is known, switch back to file tools.
 
 ## Basic operations
 
