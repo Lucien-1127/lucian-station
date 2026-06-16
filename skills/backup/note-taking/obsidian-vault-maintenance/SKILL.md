@@ -1,7 +1,7 @@
 ---
 name: obsidian-vault-maintenance
 description: Audit and restructure Obsidian vaults — batch frontmatter injection, orphan-link resolution, cross-note wikilink healing, and index/MOC generation. Use when the user wants to clean up, reorganize, or audit their vault's structural integrity.
-version: 2.1.0
+version: 2.2.0
 author: 小育 (via agent)
 license: MIT
 metadata:
@@ -38,16 +38,225 @@ Do NOT use for:
 
 ## Vault Path Resolution
 
-Always resolve the vault path first, in this order:
+Always resolve the vault path first. **Do NOT trust `OBSIDIAN_VAULT_PATH` from `.env` alone** — it may be stale or point to a backup directory, not the live vault.
 
-1. `OBSIDIAN_VAULT_PATH` environment variable
-2. User's known vault path from memory (e.g., `/mnt/c/Users/ysga1/Desktop/知識庫/知識庫/`)
-3. Fallback: `~/Documents/Obsidian Vault`
+On Windows, verify the vault path by checking Obsidian's own config:
 
 ```bash
-# Resolve once, use everywhere
-VAULT="${OBSIDIAN_VAULT_PATH:-/path/to/vault}"
+# Check Obsidian's official vault registry (Windows)
+cmd.exe /c "type C:\Users\%USERNAME%\AppData\Roaming\obsidian\obsidian.json" 2>nul
+
+# Look for the vault with "open": true — that's the currently active vault
+# Example output:
+# {
+#   "vaults": {
+#     "da2550d...": {"path": "C:\\Users\\ysga1\\Desktop\\知識庫", "ts": ...},
+#     "6966e9f...": {"path": "C:\\Users\\ysga1\\Documents\\Lunian", "ts": ..., "open": true}
+#   }
+# }
 ```
+
+Resolution order:
+
+1. Obsidian's `obsidian.json` → `"open": true` vault (most reliable on Windows)
+2. `OBSIDIAN_VAULT_PATH` environment variable (may be stale — verify it matches #1)
+3. User's known vault path from memory
+4. Fallback: `~/Documents/Obsidian Vault`
+
+### Cross-Check on WSL
+
+```bash
+# WSL path for a Windows Obsidian vault at C:\Users\ysga1\Documents\Lunian
+VAULT="/mnt/c/Users/ysga1/Documents/Lunian"
+
+# Verify: check for .obsidian directory
+test -d "$VAULT/.obsidian" && echo "VAULT CONFIRMED" || echo "NO .obsidian — wrong path"
+```
+
+## Phase — Vault Restoration from Backup
+
+Use this when the vault's `.obsidian/` directory or its note content is missing and must be restored from a known backup. This is the **pre-phase** that runs before any structural cleanup.
+
+### Discovery
+
+When a vault is empty or has lost its `.obsidian/` config, check for backups:
+
+```bash
+# Find backup directories
+find "$(dirname "$VAULT")" -maxdepth 4 -name ".obsidian" -type d 2>/dev/null
+find "$(dirname "$VAULT")" -maxdepth 4 -name "community-plugins.json" -type f 2>/dev/null
+find "$(dirname "$VAULT")" -path "*backup*" -maxdepth 4 -type d 2>/dev/null
+```
+
+Common backup locations:
+- A `_cleanup_archive/` directory at the same level as the vault
+- A `知識庫_backup_YYYYMMDD/` directory from previous maintenance runs
+- The user's Desktop or Downloads folder
+
+### Validate the Backup
+
+Before restoring, check what the backup contains:
+
+```bash
+# Check file count, vault structure, .obsidian presence
+BACKUP="/path/to/backup"
+echo "Files: $(find "$BACKUP" -type f | wc -l)"
+echo "Has .obsidian: $(test -d "$BACKUP/.obsidian" && echo YES || echo NO)"
+echo "Has plugins: $(ls "$BACKUP/.obsidian/plugins/" 2>/dev/null | wc -l)"
+```
+
+Look for:
+- **Nested vault structure** — a backup may have the vault root at the top level AND a subfolder also named `知識庫/` with another `.obsidian`. Only the ROOT `.obsidian/` matters.
+- **Plugin folders** — verify the expected plugins are present (check `community-plugins.json`).
+- **Config files** — verify `app.json`, `appearance.json`, `core-plugins.json`, `community-plugins.json`.
+
+### Restore
+
+```bash
+BACKUP="/path/to/backup"
+TARGET="/path/to/live/vault"
+rsync -av --progress "$BACKUP/" "$TARGET/"
+```
+
+This copies everything (including hidden `.obsidian/`) but preserves any files already in the target that the backup doesn't have (e.g., notes written after the backup).
+
+### Post-Restore Checks
+
+- [ ] `.obsidian/app.json` exists and has valid JSON
+- [ ] `.obsidian/community-plugins.json` lists all expected plugins
+- [ ] `.obsidian/plugins/<name>/data.json` exists for each listed plugin
+- [ ] Template files referenced in plugin configs actually exist at the expected paths
+- [ ] The homepage (`🏠 知識庫首頁.md` or similar) is present
+- [ ] Note count matches expectations (compare with backup file count)
+
+### Git Init (for Obsidian Git plugin)
+
+After restoring the vault, initialize a Git repository so the Obsidian Git plugin works:
+
+```bash
+cd "$VAULT"
+
+# Create .gitignore
+cat > .gitignore << 'GITEOF'
+.obsidian/workspace*
+.obsidian/cache/
+.obsidian/plugins/copilot/copilot-index/
+知識庫/copilot/copilot-conversations/
+*.excalidraw
+.DS_Store
+Thumbs.db
+GITEOF
+
+git init
+git config user.name "$USER"
+git config user.email "$USER@local"
+git add -A
+git commit -m "🎉 vault init: restore from backup"
+```
+
+**Pitfall:** If the user has Syncthing syncing the vault, pause Syncthing BEFORE `git init` and the initial commit — the mass file changes can trigger a sync storm.
+
+---
+
+## Pre-Phase — Root-Level Consolidation
+
+Move scattered files at the vault root into the proper `知識庫/` subdirectory structure. This runs **before** any frontmatter or structural work — the files need to be in the right folders first.
+
+### When to Use
+
+Run this when the vault root contains `.md` files outside of the main notes subdirectory. Symptoms:
+- `ls "$VAULT"/*.md` returns files (beyond `.gitignore` and `.stignore`)
+- Root-level folders like `Google Cloud/`, `☁️收件夾/`, `copilot/` exist alongside `知識庫/`
+- Templater's `newFileFolderPath` points to a path inside `知識庫/` that doesn't exist yet
+
+### Identify Root Files and Folders
+
+```bash
+VAULT="/path/to/vault"
+echo "=== Root .md files ==="
+ls "$VAULT"/*.md 2>/dev/null
+echo "=== Root folders (non-hidden) ==="
+find "$VAULT" -maxdepth 1 -type d ! -name ".*" | sort
+```
+
+### Classify Files by Content
+
+Read the first 3–5 lines of each root-level file to determine its domain:
+
+```bash
+for f in "$VAULT"/*.md; do
+  echo "=== $(basename "$f") ==="
+  head -5 "$f"
+  echo ""
+done
+```
+
+### Common Classification Map (for a Chinese AI-agent vault)
+
+| Content Signal | Target Directory |
+|--------|------------------|
+| SSH keys, Windows admin, GCP/KVM infra | `🔧代理管理/` |
+| Hermes/OpenClaw install, Agent architecture | `🔧代理管理/` or `🦞AI代理/` |
+| Prompt engineering, prompt libraries | `🔧提示詞庫/` |
+| Legal/tax/fraud documents | `⚖️法律/` |
+| Recipes, misc hobbies | `📦其他/` |
+| Unnamed/Untitled placeholders | `☁️收件夾/` (for user review) |
+| AI Agent concepts, cognitive architecture | `🦞AI代理/` |
+| System audits, dashboards | `🔧代理管理/` |
+
+### Execute the Move
+
+```bash
+INNER="$VAULT/知識庫"
+mkdir -p "$INNER/☁️收件夾"
+
+# → Target directory
+mv "$VAULT/🔑 SSH.md" "$INNER/🔧代理管理/"
+mv "$VAULT/未命名.md" "$INNER/☁️收件夾/"
+# ... repeat per file
+```
+
+### Merge Root Folders into Inner Structure
+
+Root folders like `Google Cloud/`, `☁️收件夾/`, `copilot/` should be merged:
+
+```bash
+# Move contents of root inbox into inner inbox
+mv "$VAULT/☁️收件夾/"* "$INNER/☁️收件夾/"
+
+# Merge copilot (overwrite with -n to not clobber)
+cp -n "$VAULT/copilot/"* "$INNER/copilot/"
+
+# Remove empty root folders
+rm -rf "$VAULT/☁️收件夾" "$VAULT/Google Cloud" "$VAULT/copilot"
+```
+
+### Second Pass: Classify Inbox → Domain Folders
+
+After all files land in the inbox, do a second pass to move the clearly-destined ones:
+
+| Inbox File | Target | Reason |
+|-----------|--------|--------|
+| Hermes install guide | `🔧代理管理/` | System management |
+| System info / audit | `🔧代理管理/` | System records |
+| Agent dashboard | `🔧代理管理/` | Dashboard |
+| Fraud/legal analysis | `⚖️法律/` | Legal content |
+| AI Agent concepts | `🦞AI代理/` | AI Agent domain |
+| Recipe | `📦其他/` | Miscellaneous |
+
+What stays in inbox: unnamed placeholders, finance dashboards, anything needing user attention.
+
+### Pitfalls
+
+1. **Check Templater paths first** — if Templater's `newFileFolderPath` points to `知識庫/☁️收件夾` but that inner folder doesn't exist (`知識庫/知識庫/☁️收件夾`), create it. The root-level inbox may be the real inbox.
+2. **Copilot at root vs. inner** — The Obsidian Copilot plugin stores conversations inside the vault. There may be root-level AND inner-level `copilot/` directories. Merge the root's shared prompts into the inner one, keep conversations separate.
+3. **Nested `.obsidian/`** — Backups sometimes produce `知識庫/知識庫/.obsidian/` (17MB+ with its own plugin copies). Remove it — only the vault ROOT `.obsidian/` matters.
+4. **Nested `.stfolder`** — An inner `知識庫/知識庫/.stfolder` causes Syncthing nested-sync issues. Remove it.
+5. **Do NOT move `.gitignore`, `.stignore`, `.obsidian/`** — These belong at the vault root.
+6. **Commit after consolidation** — `cd "$VAULT" && git add -A && git commit -m "📂 vault consolidation"` so Git tracks the paths correctly before any structural work.
+7. **Root-level inbox path in Omnisearch exclusions** — After moving the inbox from root to inner, Omnisearch's `excludedFolders` may still reference the old root path. Check and update if needed.
+
+---
 
 ## Pre-Phase — Rename Unnamed Files
 
@@ -252,48 +461,6 @@ If the Obsidian vault is synced with Syncthing (look for `.stfolder` in the vaul
 
 See `data-backup` skill for full Syncthing disaster recovery workflow.
 
-## Pitfalls
-
-1. **Section duplication** — always check `has_section()` before appending a `## 📋 相關文件` block. Concept index files already have structured listings.
-2. **`yaml.safe_load` on malformed frontmatter** — wrap in try/except. Skip files that don't parse rather than crash.
-3. **Do NOT touch raw content** — Phase A prepends only, never rewrites body. Phase B only appends sections at file bottom. Never modify existing wiki content.
-4. **Backup first** — `cp -r "$VAULT_PATH" "$VAULT_PATH.bak.$(date +%Y%m%d)"` before starting.
-5. **YAML issues to check after every batch run:**
-   - **Quotes in titles** — titles containing colons (`Role: AI 內核...`) must be quoted in YAML or parsing silently fails.
-   - **Tags as comma strings** — `tags: foo, bar` (raw string) instead of `tags: [foo, bar]` or the block form. Always normalize to block-list.
-   - **Empty `tags: []`** — some files end up with `tags: []` or `tags:` with no items. Fill based on directory.
-   - **Duplicate frontmatter** — two `---` blocks. Merge or remove second.
-   - **Auto-generated YAML has edge cases** — always run a syntax check after every batch operation.
-
-### YAML Repair Reference
-
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| YAML parse error | Unquoted colon in title | Wrap title in `"` |
-| Tags as comma string | `tags: a, b, c` → `tags: [a, b, c]` | Convert to block list |
-| Empty tags list | `tags: []` | Fill based on directory |
-| Duplicate frontmatter | Two `---` blocks | Merge or remove second |
-
-6. **Always offer A→B→C progression** (Phase A → Phase B → Phase C). Users appreciate staged choices, not a single monolithic plan.
-7. **High-coverage vaults (90%+ frontmatter) need curated tagging** — auto-mapping is wrong for the remaining edge cases (MOCs, archives, misc). Use a hand-crafted file-by-file mapping instead.
-8. **Template creation must be vault-informed** — audit existing templates first, identify gaps against actual content types, present staged options.
-9. **Acceptable orphans are fine** — inbox notes, the homepage, and intentionally isolated notes don't need links. Don't force-link everything.
-10. **Duplicate directory merge cleanup.** When two directories are merged (one with emoji, one without), the copied files may have `_old` suffixes. These pollute the audit output. After the merge, consider moving `_old` files into the archive (`80_封存參考/`, `歷史版本/`) or deleting them if content is truly duplicated.
-
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/vault-audit.py` | Audit: frontmatter coverage, orphan count, tag usage. `VAULT_PATH=/path python3 scripts/vault-audit.py` |
-| `scripts/inject-frontmatter.py` | Phase A: batch frontmatter injection by directory mapping |
-| `scripts/link-orphans.py` | Phase B: cross-link same-directory peers, version histories, and index pages |
-
-### Reference Files
-
-| Reference | Purpose |
-|-----------|---------|
-| `references/vault-dedup-merge-pattern.md` | 重複目錄的差異合併流程、Pitfall 與 Wikilink 修復 |
-
 ## Phase D — Template Creation (Informed by Existing Structure)
 
 After structural cleanup, the user may want templates that match their actual vault organization. **Do not create templates in isolation — audit existing ones first.**
@@ -418,15 +585,14 @@ import unicodedata
 
 def has_emoji_prefix(name):
     if len(name) == 0: return False
-    # Check if first character is an emoji (typical range)
     first = name[0]
-    if '\u2000' <= first <= '\u27ff': return False  # punctuation/arrows
-    if '\u2e80' <= first <= '\uffef': return False  # CJK
+    if '\u2000' <= first <= '\u27ff': return False
+    if '\u2e80' <= first <= '\uffef': return False
     cp = ord(first)
     return (
-        0x2600 <= cp <= 0x27BF or    # Misc symbols, Dingbats
-        0x1F300 <= cp <= 0x1F9FF or  # Misc symbols and pictographs, Emoticons
-        0x2702 <= cp <= 0x27B0       # Dingbats
+        0x2600 <= cp <= 0x27BF or
+        0x1F300 <= cp <= 0x1F9FF or
+        0x2702 <= cp <= 0x27B0
     )
 ```
 
@@ -453,16 +619,14 @@ A duplicate directory exists when TWO top-level folders contain the same numbere
 
 ```python
 def get_subdir_signature(dpath):
-    """Return a frozenset of immediate subdirectory names."""
     sig = set()
     for root, dirs, files in os.walk(dpath):
         for d in sorted(dirs):
             rel = os.path.relpath(os.path.join(root, d), dpath)
             sig.add(rel)
-        break  # only immediate children
+        break
     return frozenset(sig)
 
-# Compare all top-level directory pairs
 dirs = [d for d in os.listdir(vault) if os.path.isdir(os.path.join(vault, d))]
 signatures = {d: get_subdir_signature(os.path.join(vault, d)) for d in dirs}
 
@@ -471,7 +635,7 @@ for a in dirs:
     for b in dirs:
         if a >= b: continue
         overlap = signatures[a] & signatures[b]
-        if len(overlap) >= 3:  # 3+ matching subdirs = likely duplicate
+        if len(overlap) >= 3:
             pairs_found.append((a, b, overlap))
 ```
 
@@ -481,14 +645,13 @@ for a in dirs:
 2. Walk the non-canonical directory tree. For each file:
    - If it does NOT exist in canonical → **copy** it over.
    - If it exists and content is **identical** → skip.
-   - If it exists and content **differs** → copy with `_old` suffix on the basename (e.g., `02_上線部署清單_DEPLOYMENT_CHECKLIST_v1.0.0_old.md`).
+   - If it exists and content **differs** → copy with `_old` suffix on the basename.
 3. After merge, **delete** the non-canonical directory with `shutil.rmtree()`.
 4. Update all `[[wikilink]]` references in the vault that pointed to the deleted directory.
 
-**Pitfall — homepage / dashboard links:** After merging, check the vault homepage, any MOC index pages, and any cron-maintained dashboard notes for stale links referencing the old (deleted) directory path. Fix them by replacing the old directory name with the canonical one:
+**Pitfall — homepage / dashboard links:** After merging, check all `.md` files for stale links:
 
 ```python
-# Fix all wikilinks across the vault
 for fp in all_md_files:
     content = open(fp, 'r', encoding='utf-8').read()
     if old_dir_name in content:
@@ -498,10 +661,9 @@ for fp in all_md_files:
 
 ### Step 4: File-Level Duplicate Detection
 
-After directory dedup, scan within each directory for near-identical filenames that may represent duplicate content:
+After directory dedup, scan within each directory for near-identical filenames:
 
 ```python
-# Look for files with very similar names (ignoring small punctuation differences)
 all_files = []
 for root, dirs, files in os.walk(vault):
     if '.obsidian' in root or '/copilot' in root: continue
@@ -509,7 +671,6 @@ for root, dirs, files in os.walk(vault):
         if f.endswith('.md'):
             all_files.append(os.path.join(root, f))
 
-# Normalize name to detect near-duplicates
 from collections import defaultdict
 name_groups = defaultdict(list)
 for fp in all_files:
@@ -517,7 +678,6 @@ for fp in all_files:
     normalized = fname.replace('「', '').replace('」', '').replace('——', '').replace('—', '').replace(' ', '')
     name_groups[normalized].append(fp)
 
-# Report potential duplicates
 for key, fps in name_groups.items():
     if len(fps) > 1:
         print(f"⚠️  Possible duplicate ({len(fps)} versions): {key}")
@@ -525,34 +685,268 @@ for key, fps in name_groups.items():
             print(f"     {os.path.relpath(fp, vault)}")
 ```
 
-For each group:
-- Compare file sizes first (quick filter)
-- If sizes are close, compare full content
-- Keep the version with richer frontmatter (more metadata fields, abstract/summary)
-- Delete or archive the inferior version
+For each group, compare sizes first, then content. Keep the version with richer frontmatter.
 
 ### Step 5: Run Final Audit + Update MOCs + Homepage
 
-After all structural changes:
 1. Run the vault audit script to verify frontmatter coverage is intact
-2. Regenerate all per-directory 📋 目錄索引.md files (note counts changed after dedup)
-3. Update the vault homepage's 「🗺️ 領域索引」table with correct note counts and canonical directory paths
-4. Verify that cron jobs referencing dashboard files at specific paths still resolve
+2. Regenerate all per-directory 📋 目錄索引.md files
+3. Update homepage「🗺️ 領域索引」table with correct counts and paths
+4. Verify cron jobs referencing dashboard files still resolve
 
 ### Pitfalls Specific to Phase E
 
-1. **Project source directories inside vault** — `zhiyan-legal/`, `copilot/`, and any directory with `src/`/`tests/` subdirectories are NOT vault notes. Do not rename, restructure, or emoji-normalize them. Their README files are legitimate orphans.
-2. **Dashboard/files referenced by cron** — cron jobs and automation scripts may hardcode file paths with the old directory name. After a merge, search for any `.py`, `.sh`, `.cmd`, `.ps1`, or `.hta` files that reference the old path and update them.
-3. **`_old` suffix accumulation** — when merging different-content versions of the same file, use `_old` exactly once. If both copies differ and the merged directory already has an `_old` copy of that file, skip rather than creating `_old_old`.
-4. **Wikilink breakage** — every file move/rename inside an Obsidian vault breaks `[[wikilink]]` references. Always run a bulk search-and-replace across all `.md` files after structural changes.
-5. **Emoji directory renames break file tool paths** — the Obsidian vault is under a WSL path (`/mnt/c/Users/...`). Emoji characters (like ⚖️) work correctly there. On Windows-native tools (like the HTA launcher), paths with emoji also work. No special encoding is needed for emoji in Windows paths in 2026.
-6. **Offer one comprehensive pass, not staged sub-options** — Phase E's steps interlock (renaming shifts paths, dedup removes files). Unlike Phases A→C which can be offered incrementally, Phase E should be presented as a single operation.
+1. **Project source directories** — `zhiyan-legal/`, `copilot/`, and any dir with `src/`/`tests/` subdirectories are NOT vault notes. Do not rename or restructure them.
+2. **Cron-referenced files** — search for `.py`, `.sh`, `.cmd`, `.ps1`, `.hta` files referencing old directory paths after merge.
+3. **`_old` suffix accumulation** — use `_old` exactly once. If both copies differ and one already has `_old`, skip.
+4. **Wikilink breakage** — every file move/rename breaks `[[wikilink]]` references. Run bulk search-and-replace after structural changes.
+5. **Emoji dirs in WSL** — emoji characters (⚖️) work correctly under `/mnt/c/` paths. No special encoding needed for Windows paths in 2026.
+6. **Offer one comprehensive pass** — Phase E steps interlock, so present as a single operation (unlike Phases A–C).
 
-## Verification Checklist (Updated)
+## Phase F — Plugin Configuration & Optimization (Post-Restore)
+
+After vault restoration or as a one-time optimization pass, configure community plugins for maximum effectiveness. Skip Copilot — the user manages that one themselves.
+
+### Common Plugin Path Bug
+
+A recurring bug in `data.json` files: **concatenated path entries** where two exclusion paths are missing the comma separator between them.
+
+```json
+// BUG — two paths fused into one string:
+"知識庫/copilot/copilot-conversations 知識庫/⚖️智研AI法律/80_封存參考"
+
+// FIX — proper comma separation:
+"知識庫/copilot/copilot-conversations",
+"知識庫/⚖️智研AI法律/80_封存參考"
+```
+
+This bug can appear in **three plugins** simultaneously — always check all three:
+- `obsidian-linter/data.json` → `foldersToIgnore`
+- `metadata-menu/data.json` → `ignoredFolders`
+- `omnisearch/data.json` → `excludedFolders`
+
+### Plugin Optimization Checklist
+
+#### Omnisearch
+```json
+{
+  "openInNewPane": true,
+  "showCreateButton": true,
+  "recencyBoost": "0.5"
+}
+```
+
+**Exclusions to review:** If legal notes or other core content directories are excluded, ask the user if they want search to cover them.
+
+#### Obsidian Linter
+```json
+{
+  "lintOnSave": true,
+  "ruleConfigs": {
+    "yaml-timestamp": {
+      "enabled": true,
+      "dateCreated": "created",
+      "dateModified": "updated",
+      "date-created-key": "created",
+      "date-modified-key": "updated"
+    },
+    "yaml-key-sort": { "enabled": true },
+    "format-yaml-array": { "enabled": true },
+    "empty-line-around-blockquotes": { "enabled": true },
+    "empty-line-around-code-fences": { "enabled": true },
+    "empty-line-around-tables": { "enabled": true }
+  }
+}
+```
+
+**Key fix:** Ensure `date-created-key` and `dateCreated` use the SAME key name (`created`). If they diverge (e.g., `dateCreated: "created"` but `date-created-key: "date created"`), the linter writes to the wrong field.
+
+#### QuickAdd
+
+From zero choices (empty config), set up at minimum a **Capture** and a few **Template** choices:
+
+```json
+{
+  "choices": [
+    {
+      "name": "📥 快速捕捉",
+      "type": "Capture",
+      "captureTo": "知識庫/☁️收件夾/📥 快速捕捉 {{DATE:YYYY-MM-DD HHmmss}}.md",
+      "format": { "template": "知識庫/🎛️模板/收件夾快速捕捉模板.md" },
+      "openFileInNewTab": { "enabled": true }
+    },
+    {
+      "name": "📝 一般筆記",
+      "type": "Template",
+      "template": "知識庫/🎛️模板/一般筆記模板.md",
+      "folder": "知識庫/☁️收件夾"
+    }
+  ],
+  "enableRibbonIcon": true
+}
+```
+
+Add per-domain Template choices for the vault's content types (學習筆記, 開發筆記, etc.).
+
+#### Metadata Menu — Preset Fields
+
+Add at minimum:
+- `importance` (Number) — 1–5 priority scale
+- `topics` (YAML array) — unbounded keyword list
+
+#### Obsidian Git
+
+The plugin does NOT work without an initialized Git repository. After `git init` + first commit:
+
+```json
+{
+  "disablePush": false,
+  "autoSaveInterval": 30,
+  "autoPushInterval": 30,
+  "autoPullInterval": 30,
+  "autoBackupAfterFileChange": true
+}
+```
+
+**No remote?** The plugin still provides local version history (auto-commit every 30s).
+
+#### Core Settings (app.json)
+```json
+{
+  "livePreview": true,
+  "alwaysUpdateLinks": true,
+  "defaultViewMode": "preview"
+}
+```
+
+Enable **Workspaces** in `core-plugins.json`:
+```json
+{ "workspaces": true }
+```
+
+#### CSS Snippets
+
+Create `.obsidian/snippets/` with a comprehensive CSS file. Essential areas for Chinese/English mixed-content vaults:
+
+| Rule Area | Purpose |
+|-----------|---------|
+| **Font stack** | `Microsoft YaHei`, `PingFang SC` for Chinese; `Segoe UI` for UI |
+| **Letter spacing** | `0.02em` improves Chinese readability |
+| **Tables** | Full-width, thead bg, hover highlight |
+| **Callouts** | `border-radius: 8px`, strong left `border-left: 4px` |
+| **Headings** | H1/H2 bottom borders, padding-top spacing |
+| **Tags** | Pill-style `border-radius: 12px` |
+| **Code blocks** | `border-radius: 8px`, padded |
+| **Blockquotes** | Accent border, rounded right corners, bg tint |
+| **Mobile** | `@media (max-width: 768px)` — tighter spacing |
+| **Links** | Dashed bottom border, hover accent color |
+| **Tasks** | Strikethrough on checked items |
+
+Enable the snippet in `appearance.json` → `enabledCssSnippets: ["<filename>"]`.
+
+#### Appearance Configuration (appearance.json)
+
+```json
+{
+  "accentColor": "#7b68ee",
+  "cssTheme": "",
+  "theme": "obsidian",
+  "baseFontSize": 15,
+  "enabledCssSnippets": ["🧹 自訂樣式"]
+}
+```
+
+Choices: `theme: "obsidian"` (default, cross-platform consistent), accentColor pick a soft purple (`#7b68ee`), blue, or green. `baseFontSize: 15` for Chinese/English mix.
+
+#### Cross-Device Sync Protection (Syncthing)
+
+If the vault uses Syncthing (detect by `.stfolder` in vault root), create `.stignore`:
+
+```
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache/
+知識庫/copilot/copilot-conversations/
+.stfolder
+.stignore
+```
+
+**Nested vault cleanup:** Backups may create `知識庫/知識庫/.obsidian/` with its own plugin folders (17MB+). Remove it — Obsidian reads only the vault root. An inner `.stfolder` also causes SyncThing issues.
+
+**Phone setup:** Install Obsidian → point to SyncThing folder → enable Community Plugins → plugins auto-appear.
+
+#### Git Init (for Obsidian Git)
+
+```bash
+cd "$VAULT"
+cat > .gitignore << 'GITEOF'
+.obsidian/workspace*
+.obsidian/cache/
+.obsidian/plugins/copilot/copilot-index/
+copilot/copilot-conversations/
+*.excalidraw
+.DS_Store
+Thumbs.db
+GITEOF
+git init && git add -A && git commit -m "🎉 vault init"
+```
+
+No remote needed — Git saves local version history (auto-commit every 30s).
+
+### Verification After Phase F
+
+- [ ] Linter fires on save (edit a note, save, confirm linter ran)
+- [ ] QuickAdd 4+ commands visible in Command Palette
+- [ ] Omnisearch opens results in new pane
+- [ ] Metadata Menu shows importance + topics in frontmatter autocomplete
+- [ ] Git status shows clean tree (all changes committed)
+- [ ] .gitignore excludes workspace cache and copilot conversations
+- [ ] The 3-plugin path-bug check passed (no concatenated exclusion paths)
+- [ ] CSS snippet is enabled in appearance.json and file exists at `.obsidian/snippets/<name>.css`
+- [ ] .stignore exists and excludes workspace/cache/copilot-conversations
+- [ ] No orphaned nested `.obsidian/` directories inside the vault
+
+## Common Pitfalls (All Phases)
+
+1. **Trusting `OBSIDIAN_VAULT_PATH` without verification** — On Windows WSL, `.env` may define `OBSIDIAN_VAULT_PATH` pointing to a backup directory that was restored from, while the real active Obsidian vault is elsewhere. Always verify by checking Obsidian's `obsidian.json` config for `"open": true`.
+2. **Accidentally deleting `.stfolder`** — A missing `.stfolder` causes Syncthing to stop recognizing the folder. If you moved/cleaned up directories, check `.stfolder` still exists at the vault root after the operation. If gone, recreate with `mkdir -p "$VAULT/.stfolder"`.
+3. **Adding `.stfolder` to `.stignore`** — This would prevent Syncthing from detecting the folder at all. `.stignore` must NOT exclude `.stfolder`; each device creates its own marker locally.
+4. **Concatenated exclusion paths in plugin data.json** — two exclusion paths fused without comma separator. Check all three: linter, metadata-menu, omnisearch.
+2. **Linter timestamp key mismatch** — `dateCreated` and `date-created-key` must match. Normalize both to `created`.
+3. **Obsidian Git without a repo** — silently fails. Init repo + add `.gitignore`.
+4. **Section duplication** — always check `has_section()` before appending `## 📋 相關文件`.
+5. **`yaml.safe_load` on bad frontmatter** — wrap in try/except; skip files that don't parse.
+6. **Do NOT touch raw content** — Phase A prepends only. Phase B appends at bottom only.
+7. **Backup first** — `cp -r "$VAULT_PATH" "$VAULT_PATH.bak.$(date +%Y%m%d)"`.
+8. **High-coverage vaults (90%+) need curated tagging** — hand-crafted file map for edge cases.
+9. **Template creation must be vault-informed** — audit existing templates first.
+10. **Acceptable orphans** — inbox notes, homepage, intentionally isolated notes don't need links.
+
+## Verification Checklist
 
 - [ ] Phase A: no files start with content — all start with `---`
-- [ ] Phase B: orphan count drops from 69 to single digits (legitimate orphans only: inbox drafts, home page, test notes)
-- [ ] Phase E: no duplicate directories remain; all top-level directories have emoji prefixes
-- [ ] Phase E: project source directories (`zhiyan-legal/` etc.) are untouched
-- [ ] Phase E: homepage 領域索引 table reflects current structure and counts
+- [ ] Phase B: orphan count drops to single digits (legitimate orphans only)
+- [ ] Phase D: templates match the vault's content types and naming conventions
+- [ ] Phase E: no duplicate directories; all top-level dirs have emoji prefixes; project source dirs untouched
+- [ ] Phase F: Linter fires on save; QuickAdd commands visible; Omnisearch opens new pane; Git repo exists
+- [ ] Phase F: No concatenated paths in `foldersToIgnore`, `ignoredFolders`, or `excludedFolders`
+- [ ] Homepage 領域索引 table reflects current structure
 - [ ] Audit passes: `python3 scripts/vault-audit.py`
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/vault-audit.py` | Audit: frontmatter coverage, orphan count, tag usage. `VAULT_PATH=/path python3 scripts/vault-audit.py` |
+| `scripts/inject-frontmatter.py` | Phase A: batch frontmatter injection by directory mapping |
+| `scripts/link-orphans.py` | Phase B: cross-link same-directory peers, version histories, and index pages |
+
+### Reference Files
+
+| Reference | Purpose |
+|-----------|---------|
+| `references/vault-dedup-merge-pattern.md` | 重複目錄的差異合併流程、Pitfall 與 Wikilink 修復 |
+| `references/session-20260607-dedup-and-emoji.md` | 2026-06-07 session: Phase E dedup + emoji normalization detail |
+| `references/session-20260524-template-frontmatter.md` | 2026-05-24 session: template creation and frontmatter conventions |
+| `references/session-20260523-optimization.md` | 2026-05-23 session: attribute fixing and tag unification |
+| `references/session-20260616-restore-and-plugin-config.md` | 2026-06-16 session: vault restoration from backup + plugin optimization with exact data.json values |

@@ -19,7 +19,19 @@ Use this skill for Obsidian vault work: reading, searching, creating, editing no
 
 Use a known or resolved vault path before calling file tools.
 
-The documented vault-path convention is the `OBSIDIAN_VAULT_PATH` environment variable, for example from `~/.hermes/.env`. If it is unset, use `~/Documents/Obsidian Vault`.
+**On Windows WSL, do NOT trust `OBSIDIAN_VAULT_PATH` from `.env` alone.** It may point to a backup directory, not the live vault. The most reliable source is Obsidian's own vault registry:
+
+```bash
+# On Windows: check Obsidian's config for the active vault
+cmd.exe /c "type C:\Users\%USERNAME%\AppData\Roaming\obsidian\obsidian.json" 2>nul
+# Look for the entry with "open": true
+```
+
+Resolution order:
+1. Obsidian's `obsidian.json` → `"open": true` vault (most reliable on Windows)
+2. `OBSIDIAN_VAULT_PATH` environment variable (verify it matches #1)
+3. User's known vault path from memory
+4. Fallback: `~/Documents/Obsidian Vault`
 
 File tools do not expand shell variables. Do not pass paths containing `$OBSIDIAN_VAULT_PATH` to `read_file`, `write_file`, `patch`, or `search_files`; resolve the vault path first and pass a concrete absolute path. Vault paths may contain spaces, which is another reason to prefer file tools over shell commands.
 

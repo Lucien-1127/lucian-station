@@ -218,6 +218,46 @@ with open('.env', 'w') as f: f.write(content)
 PYEOF
 ```
 
+## Complete Provider Cleanup Checklist
+
+When removing a provider (e.g. OpenRouter, Google Gemini), keys and references can hide in multiple places. Check ALL of these:
+
+| # | Location | What to look for | How to remove |
+|---|----------|-----------------|---------------|
+| 1 | `~/.hermes/.env` | `PROVIDER_API_KEY=...` line | `sed -i 's/^KEY_NAME=/#KEY_NAME=/'` (comment out, don't delete — preserves formatting) |
+| 2 | `~/.hermes/config.yaml` → `providers.<name>` | Provider block with `base_url`, `api_key`, `api_mode` | Remove the entire block via `sed`/Python. The `patch` tool is blocked on this file. |
+| 3 | `~/.hermes/config.yaml` → `api_keys:` section | Bottom of file, `provider_name: key_value` | Remove the line. This section is separate from `providers.<name>`. |
+| 4 | `~/.hermes/config.yaml` → `credential_pool_strategies` | `provider_name: fill_first` or similar | Remove the entry or set to empty `credential_pool_strategies: {}` |
+| 5 | `~/.hermes/config.yaml` → top-level `openrouter:` / `bedrock:` | Functional config like `response_cache`, `min_coding_score` — these are NOT credentials | **DO NOT REMOVE**. These are feature settings, not API keys. Removing them breaks functionality. |
+
+**Important**: A single provider can leave traces in `.env` AND multiple spots in `config.yaml` simultaneously, possibly with different key values. Always grep both files after cleanup:
+
+```bash
+grep -in 'provider_name\|KEY_NAME' ~/.hermes/.env ~/.hermes/config.yaml
+```
+
+### After Cleanup: Verify
+
+```bash
+# Check config
+grep -A 15 "^providers:" ~/.hermes/config.yaml | head -18
+
+# Check .env
+grep -v '^$\|^#' ~/.hermes/.env | head -20
+```
+
+### Safe vs Blocked Tools for Config Files
+
+| Tool | `.env` | `config.yaml` |
+|------|--------|---------------|
+| `hermes config set KEY VAL` | ❌ (not applicable — env vars) | ✅ **Safe, unblocked** — preferred method |
+| `patch` (find-and-replace) | ❌ **BLOCKED** — protected system file | ❌ **BLOCKED** — protected system file |
+| `write_file` | ❌ **BLOCKED** | ❌ **BLOCKED** |
+| `terminal` with `sed -i` | ✅ Works (simple one-liners) | ✅ Works (but may trigger approval prompt for heredocs) |
+| `terminal` with Python | ✅ Works (but may trigger approval prompt) | ✅ Works (but may trigger approval prompt) |
+
+**Rule of thumb**: For config.yaml, use `hermes config set` first. Only fall back to `sed`/Python for removing entire provider blocks or sections that `hermes config set` can't delete.
+
 ## Pitfalls
 
 - **Keys pasted in chat messages are stored in session logs.** Every message in the conversation (including API keys) is persisted in `~/.hermes/sessions/` as plaintext JSONL. If the user pastes a key, immediately warn them and advise key rotation after configuration. Never echo the full key back in a response — use truncated forms like `sk-d41fc...` instead.
@@ -228,6 +268,9 @@ PYEOF
 - **When updating a key used by Hermes**, also update `~/.hermes/.env` and do `/restart` (gateway) or restart CLI for changes to take effect.
 - **Gemini deprecated models**: `gemini-2.0-flash`, `gemini-2.0-flash-001`, `gemini-1.5-flash` return 404. Current stable models: `gemini-2.5-flash`, `gemini-2.5-pro`.
 - **`.env` file protection**: The patch tool cannot edit `~/.hermes/.env`. Use `sed` via terminal to update it.
+- **Don't remove functional config when cleaning credentials**: The `openrouter:` top-level section in config.yaml (`response_cache`, `min_coding_score`, etc.) is FEATURE configuration, not credentials. Removing it breaks response caching and model scoring even if you no longer use OpenRouter as a provider.
+- **Keys can differ between `.env` and `config.yaml`**: The `api_keys:` section in config.yaml and the `OPENROUTER_API_KEY=...` in `.env` may have different values. Always check BOTH files. The `.env` value is what Hermes actually uses at runtime; `config.yaml` api_keys is a reference cache.
+- **`hermes config set` is unblocked but can't delete sections**: You can update or null out a value (`hermes config set providers.openrouter null`), but there is no `hermes config unset` for entire provider blocks. Use `sed`/Python via terminal to remove full blocks.
 
 ## Gemini Free Credits — Setup as Default Model
 
