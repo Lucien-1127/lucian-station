@@ -1,7 +1,7 @@
 ---
 name: github-repo-management
 description: "Clone/create/fork repos; manage remotes, releases."
-version: 1.1.0
+version: 1.2.0
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -81,6 +81,36 @@ git clone git@github.com:owner/repo-name.git
 gh repo clone owner/repo-name
 gh repo clone owner/repo-name -- --depth 1
 ```
+
+### 🔧 Troubleshooting Cloning (Network Timeout)
+
+When `git clone` hangs or times out (common behind firewalls or slow connections):
+
+**Option A — Download as ZIP via API (whole repo):**
+
+```bash
+OWNER="owner"
+REPO="repo-name"
+curl -sL "https://github.com/$OWNER/$REPO/archive/refs/heads/main.zip" -o repo.zip
+python3 -c "
+import zipfile, os
+with zipfile.ZipFile('repo.zip', 'r') as z:
+    z.extractall('.')
+src = '$REPO-main'
+for item in os.listdir(src):
+    os.rename(os.path.join(src, item), os.path.join('.', item))
+os.rmdir(src)
+os.remove('repo.zip')
+"
+```
+
+**Option B — Individual files via raw.githubusercontent.com (lightweight):**
+
+```bash
+curl -sL "https://raw.githubusercontent.com/$OWNER/$REPO/main/README.md" -o README.md
+```
+
+**Pitfall:** Extracted dir name = `$REPO-main` (main) or `$REPO-master` (legacy). Check with `ls`.
 
 ## 2. Creating Repositories
 

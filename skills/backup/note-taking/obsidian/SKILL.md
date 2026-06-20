@@ -164,6 +164,56 @@ Common issues found in vault audits:
 - [ ] Homepage links to all directory MOCs
 - [ ] Script output confirms file count before and after changes
 
-## Reference Files
+## Copilot Plugin Troubleshooting
+
+When the user reports **Copilot templates/custom prompts not loading** or **"模板讀不到"**, the most common cause is a path mismatch in the Copilot plugin's `data.json`.
+
+### Diagnosis
+
+Copilot v3.x stores its configuration in:
+
+```
+<vault>/.obsidian/plugins/copilot/data.json
+```
+
+Key path fields to check:
+
+| Field | Purpose | Example (correct) |
+|-------|---------|-------------------|
+| `customPromptsFolder` | Where custom prompts (slash commands) live | `copilot/copilot-custom-prompts` |
+| `defaultSaveFolder` | Where conversations are saved | `copilot/copilot-conversations` |
+| `memoryFolderName` | Where saved memory notes go | `copilot/memory` |
+| `userSystemPromptsFolder` | Where system prompts are stored | `copilot/system-prompts` |
+
+### Common Root Cause: Vault Restructuring
+
+If the vault was reorganized and Copilot data was moved from a subdirectory (e.g. `知識庫/copilot/`) to the vault root (`copilot/`), the paths in `data.json` will still point to the old location. Copilot silently fails to find templates and shows an empty list.
+
+### Fix
+
+Use `patch` to update each path in `data.json`:
+
+```bash
+# Check current paths
+grep -E '"defaultSaveFolder"|"customPromptsFolder"|"memoryFolderName"|"userSystemPromptsFolder"' .obsidian/plugins/copilot/data.json
+```
+
+Edit each one to remove the stale prefix. Example (fixing `知識庫/copilot/...` → `copilot/...`):
+
+```
+old: "知識庫/copilot/copilot-custom-prompts"
+new: "copilot/copilot-custom-prompts"
+```
+
+### Additional Checks
+
+1. **Verify actual directories exist**: `ls -la <vault>/copilot/copilot-custom-prompts/`
+2. **Check for orphaned template directories**: If there's a `copilot-模板/` (or similar) that isn't referenced in `customPromptsFolder`, the templates there are invisible to Copilot. Either:
+   - Move them into the configured `customPromptsFolder`, or
+   - Point `customPromptsFolder` to that directory instead
+3. **Clean up empty garbage files**: `copilot/copilot-custom-prompts.md` (at vault root) is a dead 0-byte file that can be safely removed
+4. **Reload plugins**: After fixing paths, the user must reload Obsidian or use `Ctrl+P` → `Reload without saving` for changes to take effect
+
+### Reference Files
 
 - `references/vault-audit.md` — Complete audit scripts and session-specific examples

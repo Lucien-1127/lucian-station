@@ -484,6 +484,121 @@ Key log patterns to look for:
 
 See `references/syncthing-data-loss-investigation.md` for a full investigation recipe.
 
+---
+
+## Section D: Windows Launcher Strategies
+
+Beyond simple `.cmd` wrappers, you may need a full interactive launcher dashboard for tools (Hermes, gcloud, Ollama, etc.). This section compares the available technologies on Windows for building clickable menus.
+
+### Technology Comparison
+
+| Tech | Pros | Cons | Best For |
+|------|------|------|----------|
+| **Batch (.cmd)** | Ultra-reliable, no deps, UTF-8 support, instant startup | Text-only UI, limited styling | Operational tools, internal launchers, WSL integration |
+| **HTA (.hta)** | Pretty HTML/CSS UI, runs locally, no installer | Font CDN fails, JS encoding fragile, old IE engine | Desktop prototypes, personal dashboards (high risk) |
+| **PowerShell (.ps1)** | Rich functions, state management, PS ecosystem | Execution policy friction, slower startup | Admin scripts, tool shortcuts, CI/CD integration |
+| **Electron** | Modern, cross-platform, npm ecosystem | Heavy (~100MB), installer complexity | Professional tools, multi-window apps, public distribution |
+
+### Quick Decision Tree
+
+```
+Need to launch tools / run commands?
+  ├─ YES, locally on my machine (internal tool)
+  │   ├─ Aesthetics matter?
+  │   │   ├─ YES → HTA (pretty, but fragile — see pitfalls)
+  │   │   └─ NO → Batch (.cmd) ← RECOMMENDED
+  │   └─ Complex state / power user features?
+  │       └─ YES → PowerShell (.ps1 profile)
+  └─ Distribute to others?
+      └─ Electron / .NET / Windows installer
+```
+
+### Batch Launcher Best Practices
+
+Batch is the RECOMMENDED choice for internal tool launchers on Windows:
+
+- **Built into Windows** — cmd.exe on every machine, zero deps
+- **UTF-8 support** — `chcp 65001 >nul 2>&1` handles emoji & CJK
+- **Deterministic** — no HTML/CSS/JS engine mismatches
+
+**Boilerplate template** at `templates/launcher.cmd` — ready-to-copy with:
+- Menu loop (`:menu` → `goto menu`)
+- WSL command integration via `wsl /abs/path/to/binary`
+- UTF-8 + emoji support
+- Category sections (AI, Cloud, Knowledge, Dev Tools)
+
+**Key patterns in the template:**
+- Line `:menu` is the loop; each option returns via `goto menu`
+- Use `echo.` for blank lines, `timeout /t 2` for feedback pauses
+- `cd /d` forces drive letter change when needed
+- Use `wsl /home/<user>/.local/bin/hermes` — NOT `wsl hermes` (non-interactive shell won't find PATH)
+
+### HTA Pitfalls (for Reference)
+
+HTA can produce pretty dashboards but has severe reliability issues. **Do not recommend HTA for daily-use operational tools** — user feedback from a 2026-06-06 session confirmed Batch was preferred over HTA because it simply works.
+
+| Pitfall | Symptom | Fix |
+|---------|---------|-----|
+| External CDNs fail silently | Page renders blank (font load halts HTML parsing) | System fonts only: `font-family: \"Segoe UI\", \"Microsoft JhengHei\", sans-serif` |
+| Mixed VBScript + HTML encoding errors | Parsing errors, buttons don't respond | Use pure VBScript only, or switch to Batch entirely |
+| JavaScript unreliability | Modern JS (async/await, ES6) expectations fail | Rewrite in pure VBScript, or use Batch |
+| CSS framework failures | CSS Grid, Flexbox unreliable | Simple tables or inline-block layouts only |
+
+See `references/hta-failures-2026-06-06.md` for the full failure transcript and debugging timeline.
+
+### PowerShell Interactive Menu Pattern
+
+For users who want a richer menu without HTA's fragility, add an interactive menu function to `$PROFILE`:
+
+```powershell
+function ai {
+    Clear-Host
+    Write-Host "  ════════════════════════════════════════"
+    Write-Host "  🤖  AI 代理啟動中心"
+    Write-Host "  ════════════════════════════════════════"
+    Write-Host ""
+    Write-Host "  ┌─────┬──────────────────────────────┐"
+    Write-Host "  │  1  │  🗣️  開始對話                  │"
+    Write-Host "  │  2  │  📊  查看狀態                  │"
+    Write-Host "  │  3  │  🌐  開啟 Dashboard           │"
+    Write-Host "  │  4  │  📋  查看當前設定              │"
+    Write-Host "  │  5  │  🏥  健康檢查                  │"
+    Write-Host "  │  0  │  🚪  離開                      │"
+    Write-Host "  └─────┴──────────────────────────────┘"
+    $choice = Read-Host "  請選擇 (0-5)"
+    switch ($choice) {
+        "1" { wsl -e $WSL_HERMES chat }
+        "2" { wsl -e $WSL_HERMES status; Read-Host; ai }
+        "3" { Start-Process "http://localhost:8000"; Start-Sleep 1; ai }
+        "4" { hermes-models; Read-Host; ai }
+        "5" { wsl -e $WSL_HERMES doctor; Read-Host; ai }
+        "0" { return }
+        default { Start-Sleep 1; ai }
+    }
+}
+```
+
+Key details:
+- `Read-Host` pauses for user input before looping back via recursive call
+- `Switch` handles all branches (invalid → default → retry)
+- Each output-producing action calls `Read-Host; ai` to let user read before returning
+- `Clear-Host` at top keeps the menu fresh
+
+### Naming Guidance
+
+**Name functions after what the user does, not the underlying tech:**
+
+| ❌ Avoid | ✅ Use | Reason |
+|---------|-------|--------|
+| `gemini` | `chat` | User types `chat` to start talking; `gemini` sounds like a standalone tool |
+| `hermes-model` | `switch-model` | User wants to change model, not know it's "hermes" |
+| — | `ai` | Universal menu command, works regardless of backend changes |
+
+### Related Skills for Launcher Development
+
+- `windows-hta-launcher` — Deep dive into HTA implementation (if you decide HTA is right)
+- `powershell-profile-setup` — Full PowerShell profile configuration
+
 ## Related
 
 - `hermes-agent` skill — general Hermes config (protected/bundled)
@@ -494,3 +609,5 @@ See `references/syncthing-data-loss-investigation.md` for a full investigation r
 - `references/mobile-ssh-wsl-configuration.md` — detailed mobile/iPhone SSH configuration guide via Mirrored Networking
 - `references/syncthing-data-loss-investigation.md` — step-by-step sync disaster investigation recipe
 - `references/winget-software-installation-workaround.md` — installing Windows GUI software from WSL2 via winget + .bat workaround (Recuva file recovery context)
+- `references/hta-failures-2026-06-06.md` — HTA rendering failure transcript and debugging timeline (see Section D)
+- `templates/launcher.cmd` — Ready-to-copy Batch launcher scaffold with UTF-8 + menu structure

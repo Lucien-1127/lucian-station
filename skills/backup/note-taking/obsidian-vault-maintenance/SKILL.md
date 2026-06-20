@@ -1,7 +1,7 @@
 ---
 name: obsidian-vault-maintenance
 description: Audit and restructure Obsidian vaults — batch frontmatter injection, orphan-link resolution, cross-note wikilink healing, and index/MOC generation. Use when the user wants to clean up, reorganize, or audit their vault's structural integrity.
-version: 2.3.0
+version: 2.3.1
 author: 小育 (via agent)
 license: MIT
 metadata:
@@ -304,6 +304,21 @@ After all files land in the inbox, do a second pass to move the clearly-destined
 | Recipe | `📦其他/` | Miscellaneous |
 
 What stays in inbox: unnamed placeholders, finance dashboards, anything needing user attention.
+
+### Post-Move: Update Directory Indexes (MOC)
+
+After moving files from the inbox into target directories, **check and update the `📋 目錄索引.md` of each affected directory**:
+
+1. Open each target directory's `📋 目錄索引.md` (create one if it doesn't exist)
+2. Add wikilinks for the new file(s) in the appropriate section
+3. Bump the note count in the header (e.g. `共 31 筆筆記` → `共 35 筆筆記`)
+4. Update the `最後更新` date
+
+This step is easy to forget because the move operation is file-level, but the MOC is a directory-level index — they stay out of sync if you only do the moves.
+
+**When to create vs. update:**
+- Directory already has a `📋 目錄索引.md` → update entries + count + date
+- Directory lacks one → skip for now (Phase C covers MOC creation as a separate pass), unless the user specifically asked for full indexing
 
 ### Pitfalls
 

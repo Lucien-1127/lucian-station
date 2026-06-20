@@ -115,6 +115,19 @@ OLLAMA_MODELS="C:\\Users\\ysga1\\.ollama\\models" ollama.exe create <model-name>
 
 This copies the GGUF into Ollama's blob storage and creates the model manifest.
 
+### Uncensored / Alternative Model Sources
+
+The user prefers uncensored (no safety filter) model variants. Key sources:
+
+| Model | Size | Source | Notes |
+|-------|------|--------|-------|
+| `nexusriot/Gemma-4-Uncensored-HauhauCS-Aggressive` | 8B | Ollama library (`:e4b` tag) | Already in library, pull directly |
+| `zaakirio/gemma-4-12b-it-uncensored-GGUF` | 12B | HuggingFace | Q4_K_M ~7.4GB, heretic/abliterated variant |
+
+**Search pattern**: On HuggingFace, look for repos tagged `heretic`, `abliterated`, `uncensored`, or `decensored`.
+
+**User preferences**: Q4_K_M quantization (best quality/size balance), keeping only uncensored/heretic variants, RTX 2050 4GB VRAM + 16GB RAM.
+
 ## Model Path Issues
 
 ### OLLAMA_MODELS Environment Variable
