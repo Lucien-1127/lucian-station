@@ -390,10 +390,18 @@ After all files land in the inbox, do a second pass to move the clearly-destined
 | Character/image prompts (chibi, gothic) | `🎬提示詞庫/🖼️ 圖像提示詞/` | Image generation prompts |
 | Notion/copywriting/social-media prompts | `🎬提示詞庫/✍️ 文案類/` | Copywriting |
 | Research reports, Firecrawl, analysis | `🤖多模型委員會開發/` or `📚提示詞工程(學習）/` | Research/analysis |
+| NotebookLM deep-dives, AI-tool tutorials | `🤖多模型委員會開發/` | AI tool application guides |
+| Prompt factory / prompt engineering systems | `🎬提示詞庫/🛠️ 通用提示詞/` | General prompt frameworks |
+| Social media / algorithm / marketing research | `📦雜項/` | Mixed-domain analysis, no dedicated category |
+| Market analysis / freelance market reports | `📦雜項/` | Data reports, non-essential archive |
 | Personal growth, habits, emotional notes | `🪴自我成長/` | Self development |
 | Finance dashboards, account info | `📦雜項/` | Miscellaneous |
 | Recipes, SCP, drama scripts, entertainment | `📦雜項/` | Entertainment / non-essential |
 | Source code projects (src/, tests/, .py) | **Move OUT of vault** to Desktop or project dir | Not Obsidian notes |
+| NotebookLM deep-dives, AI-tool advanced tutorials | `🤖多模型委員會開發/` | AI tool application guides (not prompt engineering) |
+| Social media / algorithm / meme analysis | `📦雜項/` | Cross-domain research, no dedicated category |
+| AI / freelance market analysis reports | `📦雜項/` | Data-based market reports, non-essential archive |
+| 終極提示詞工廠 / prompt factory systems | `🎬提示詞庫/🛠️ 通用提示詞/` | General prompt generation frameworks |
 
 ### Third Pass (if needed): Reorganize Merged Target Folders
 
@@ -429,6 +437,8 @@ When files arrive from 🔧代理管理 + 🦞AI代理 + 📋 代理系統報告
 
 1. **Do NOT auto-file everything** — leave truly ambiguous files in the inbox for the user to decide. Finance dashboards, account info, and mixed-domain documents are good candidates to keep in inbox.
 2. **Check for source-code projects** — directories with `src/`, `tests/`, or non-markdown code files (`.py`, `.js`) are NOT vault notes. Move them out of the vault entirely.
+   * **⚠️ Recurring return pattern:** A project dir removed from the vault (e.g. `zhiyan-legal/`) may reappear later if the user regenerates it from a development environment synced to the vault location. Before removing, verify the Desktop or another permanent location has an authoritative backup (`ls /mnt/c/Users/$USER/Desktop/zhiyan-legal`). After removal, note it in memory as a potential recurring intrusion so future sessions don't treat it as a surprise.
+   * **⚠️ `rm -rf` from execute_code may fail silently.** When removing a project directory from the vault, always verify with a direct `terminal()` call afterward (`rm -rf path && echo removed && test -d path || echo gone`). The `execute_code` wrapper's `terminal()` calls can have shell escaping issues that leave the directory intact.
 3. **Update per-directory MOC indexes** — after moving files into a categorized library, check the target subdirectory's `📋 目錄索引.md` and update counts/entries. The old top-level MOC may reference non-existent paths now.
 4. **.txt → .md conversion** — prompt-library `.txt` files from Grok/Seedance repos should be renamed to `.md` in place. Obsidian ignores `.txt`.
 5. **Canvas files** (`.canvas`) are Obsidian-native and should be kept. They contain visual diagrams for system architecture, not junk.
@@ -446,7 +456,8 @@ This step is easy to forget because the move operation is file-level, but the MO
 
 **When to create vs. update:**
 - Directory already has a `📋 目錄索引.md` → update entries + count + date
-- Directory lacks one → skip for now (Phase C covers MOC creation as a separate pass), unless the user specifically asked for full indexing
+- Directory lacks one but the **homepage links to `dir/📋 目錄索引`** → **create it** (broken link otherwise). Use the vault's existing index format as template.
+- Directory lacks one and homepage doesn't link → skip for now (Phase C covers MOC creation as a separate pass), unless the user specifically asked for full indexing
 
 ### Pitfalls
 
@@ -466,10 +477,11 @@ Before any frontmatter work, scan for generic filenames and rename them based on
 
 ### Scan Targets
 
-| Pattern | Suggested Rename |
+| Pattern | Suggested Action |
 |---------|-----------------|
-| `未命名.md` or `Untitled.md` | Extract first `# Heading` → use that as filename |
-| Files with only generic placeholders | Same approach |
+| `未命名.md` or `Untitled.md` **with substantive content** (body text beyond frontmatter/template headings) | Extract first `# Heading` → use that as filename |
+| `未命名.md` or `Untitled.md` that is **truly empty** (only frontmatter + "原始內容" or equivalent blank template section, no user-written content) | **Delete** — empty capture templates should not persist |
+| Files with only generic placeholders | Rename by first heading, or **delete** if empty |
 
 ### Script Pattern
 
@@ -1410,7 +1422,9 @@ with open(path, 'w') as f:
 7. **Backup first** — `cp -r "$VAULT_PATH" "$VAULT_PATH.bak.$(date +%Y%m%d)"`.
 8. **High-coverage vaults (90%+) need curated tagging** — hand-crafted file map for edge cases.
 9. **Template creation must be vault-informed** — audit existing templates first.
-10. **Acceptable orphans** — inbox notes, homepage, intentionally isolated notes don't need links.
+9. **Acceptable orphans** — inbox notes, homepage, intentionally isolated notes don't need links.
+10. **Patch tool + Obsidian `\|` produces `|||` artifacts** — When using `patch` to update lines containing Obsidian wikilinks (`[[path\|display]]`), the fuzzy matching can add an extra `|` prefix, turning `|| text` into `||| text`. This breaks the table. **Fix**: after patching, always verify with `grep -n '|||'` and use `sed -i 's/|||/||/g'` to clean up.
+11. **Missing `📋 目錄索引.md` when homepage links to it** — After moving files into a category that has no index file, check if the vault homepage (`🏠 知識庫首頁.md`) references `category/📋 目錄索引`. If yes, create the index file; otherwise the link is broken. Use an existing category's index as template.
 
 ## Verification Checklist
 
