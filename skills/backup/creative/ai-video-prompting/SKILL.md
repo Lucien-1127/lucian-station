@@ -141,18 +141,31 @@ POV looking up at mountain peak.
 | 內容主體 | 3-10s | 核心動作/舞蹈/手指舞 |
 | 爆點收尾 | 10-15s | 定格+俏皮收尾，loop-ready |
 
+### 情緒→鏡頭+光線速查
+
+| 情緒 | 鏡頭 | 光線 |
+|------|------|------|
+| 浪漫 | medium close-up, shallow DOF, slow orbit | Golden Hour, backlit, warm |
+| 驚悚 | close-up, Dutch angle, handheld | Chiaroscuro, strobe, dark |
+| 史詩 | wide shot, low angle, crane up | Volumetric rays, rim light |
+| 親密 | close-up, static, minimal movement | Candlelight, warm tones |
+| 科幻 | tracking, FPV drone, fast sweeping | Neon, bioluminescence |
+| 商業 | macro, orbital, smooth precise | 3-point lighting, caustics |
+
 ---
 
 ## 常見問題修復
 
 | 症狀 | 解法 |
 |------|------|
-| 角色變臉 | 用 I2V + 縮短到 5-6 秒 + Character DNA |
-| 脖子/頭歪 | ❌ `tilted head` negative 無效 → ✅ 寫 `head remains naturally upright and centered` |
-| 出現不想要音樂 | ❌ `no music` 無效 → ✅ `Ambient sounds only, silence, [Audio: environmental only]` |
-| 音訊不同步 | 視覺和音訊用同一個觸發詞：`The balloon pops suddenly` + `Loud popping sound` |
-| 閃退/卡0% | 可能是觸發審查 → 先測試 `blue sky with clouds` 確認帳號正常 |
-| 文字亂碼 | 維持 1-3 字，用引號包：`A neon sign that says "OPEN"` |
+| 角色變臉 | 用 I2V + 縮短到 5-6 秒 + Character DNA + 穩定關鍵詞 |
+| 脖子/頭歪 | ❌ negative 無效 → ✅ 寫 head remains naturally upright and centered，negative 補 tilted head, neck bent |
+| 出現不想要音樂 | ❌ no music 反效果（粉紅大象）→ ✅ Ambient sounds only, silence |
+| 音訊不同步 | 視覺+音訊用同一個觸發詞：balloon pops + loud popping；加時間線索：At the exact moment of impact |
+| 閃退/卡0% | ①伺服器超載→等5-10分 ②觸發審查→測blue sky ③滑動視窗限制→24小時非每日重置 ④手機快取→清除重開 |
+| 文字亂碼 | 1-3字成功率~70%，4+字大幅下降；引號包字：sign that says OPEN；重要文字後期合成 |
+| Grok 說不能生圖 | 模型幻覺→強制重試：You do have image generation capabilities；開新對話；明確提示Using your Grok Imagine feature |
+| 畫質遞減 | Last Frame 循環每 3-4 次用 AI upscaler（Topaz/Magnific）；截圖用 PNG 無損格式 |
 
 ---
 
@@ -177,11 +190,27 @@ POV looking up at mountain peak.
 | 關鍵詞 | 效果 |
 |--------|------|
 | `Volumetric lighting` | 耶穌光（God rays） |
+| `Subsurface scattering` | 半透明材質發光（皮膚、葉片） |
+| `Caustics` | 水/玻璃折射光紋 |
+| `Bioluminescence` | 有機藍/綠冷光 |
 | `Golden Hour` | 溫暖黃金時刻 |
 | `Blue Hour` | 冷色暮光 |
 | `Chiaroscuro` | 強烈明暗對比（黑色電影） |
 | `Rim light` | 輪廓光（分離主體背景） |
 | `Neon` | 賽博龐克風格光線 |
+| `3-Point Lighting` | 標準棚燈 |
+
+### 調色
+
+| 關鍵詞 | 效果 |
+|--------|------|
+| `Teal and Orange` | 好萊塢主流橙藍調 |
+| `Warm Tones` | 暖色調（橙/黃） |
+| `Cool Tones` | 冷色調（藍/青） |
+| `Monochromatic` | 單色調 |
+| `High Contrast` | 深黑亮白 |
+| `Desaturated` | 低飽和、嚴肅 |
+| `Oversaturated` | 鮮豔、活潑 |
 
 ### 風格參考
 
