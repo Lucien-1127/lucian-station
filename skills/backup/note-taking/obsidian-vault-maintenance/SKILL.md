@@ -1,7 +1,7 @@
 ---
 name: obsidian-vault-maintenance
 description: Audit and restructure Obsidian vaults — batch frontmatter injection, orphan-link resolution, cross-note wikilink healing, and index/MOC generation. Use when the user wants to clean up, reorganize, or audit their vault's structural integrity.
-version: 2.3.1
+version: 2.4.0
 author: 小育 (via agent)
 license: MIT
 metadata:
@@ -44,7 +44,7 @@ On Windows, verify the vault path by checking Obsidian's own config:
 
 ```bash
 # Check Obsidian's official vault registry (Windows)
-cmd.exe /c "type C:\Users\%USERNAME%\AppData\Roaming\obsidian\obsidian.json" 2>nul
+cmd.exe /c "type C:\\Users\\%USERNAME%\\AppData\\Roaming\\obsidian\\obsidian.json" 2>nul
 
 # Look for the vault with "open": true — that's the currently active vault
 # Example output:
@@ -54,6 +54,12 @@ cmd.exe /c "type C:\Users\%USERNAME%\AppData\Roaming\obsidian\obsidian.json" 2>n
 #     "6966e9f...": {"path": "C:\\Users\\ysga1\\Documents\\Lunian", "ts": ..., "open": true}
 #   }
 # }
+
+# Also check for secondary vaults from iCloud or OneDrive
+echo "--- iCloud vaults ---"
+find /mnt/c/Users/$USER/iCloudDrive -name ".obsidian" -type d -maxdepth 2 2>/dev/null
+echo "--- OneDrive vaults ---"
+find /mnt/c/Users/$USER/OneDrive -name ".obsidian" -type d -maxdepth 3 2>/dev/null
 ```
 
 Resolution order:
@@ -66,12 +72,24 @@ Resolution order:
 ### Cross-Check on WSL
 
 ```bash
-# WSL path for a Windows Obsidian vault at C:\Users\ysga1\Documents\Lunian
+# WSL path for a Windows Obsidian vault at C:\\Users\\ysga1\\Documents\\Lunian
 VAULT="/mnt/c/Users/ysga1/Documents/Lunian"
 
 # Verify: check for .obsidian directory
 test -d "$VAULT/.obsidian" && echo "VAULT CONFIRMED" || echo "NO .obsidian — wrong path"
 ```
+
+### Multi-Vault Detection
+
+Users may have multiple Obsidian vaults that all need the same reorganization. Common sources:
+
+| Source | Typical Path | Risk |
+|--------|-------------|------|
+| iCloud | `~/iCloudDrive/iCloud~md~obsidian/知識庫/` | iCloud files are "on-demand" — operations via WSL `/mnt/` are **extremely slow** and time out. Prefer Windows-native PowerShell for iCloud operations, or skip iCloud vaults entirely and tell the user to apply changes from within Obsidian on the iCloud device. |
+| OneDrive | `~/OneDrive/文件/Obsidian Vault/` | Usually empty or a placeholder vault. Check actual content before investing effort. |
+| Backup dirs inside vault root | `_cleanup_backup/`, `_optimized_backup/`, `backup_*` | These are INSIDE the vault — Obsidian shows them as folders. Do NOT reorganize these; they are outdated clones. Move them OUTSIDE the vault before starting (see Vault Root Sanitization pre-phase). |
+
+**iCloud speed warning:** Do NOT attempt bulk operations (moves, renames, deletes) on iCloud paths from WSL. Each file access triggers a cloud download. Operations that finish in <1s on a local drive can time out at 15-30s on iCloud. Instead, inform the user which changes to make and let Obsidian+local tools handle iCloud sync.
 
 ## Phase — Vault Restoration from Backup
 
@@ -217,9 +235,74 @@ git commit -m "🎉 vault init: restore from backup"
 
 ---
 
-## Pre-Phase — Root-Level Consolidation
+## Pre-Phase — Vault Root Sanitization
 
-Move scattered files at the vault root into the proper `知識庫/` subdirectory structure. This runs **before** any frontmatter or structural work — the files need to be in the right folders first.
+Before any structural work, inspect the vault root for directories that will **shadow** the reorganization in Obsidian's file explorer. These are non-note directories at the vault root containing old copies of the vault's structure.
+
+### Detection
+
+```bash
+VAULT="/path/to/vault"
+echo "=== Vault root (Obsidian sees these) ==="
+ls -1 "$VAULT/" | grep -v "^\."
+
+echo ""
+echo "=== Check for backup dirs with old vault structure ==="
+for d in "$VAULT/"*/; do
+    name=$(basename "$d")
+    case "$name" in
+        _cleanup_backup|_optimized_backup|_backup|backup_*)
+            md_count=$(find "$d" -type f -name '*.md' 2>/dev/null | wc -l)
+            echo "  ⚠️ BACKUP DIR: $name ($md_count .md files inside)"
+            ;;
+    esac
+done
+```
+
+### The Shadowing Problem
+
+When a backup directory like `_cleanup_backup/` contains an old copy of `知識庫/` with the ORIGINAL folder names, Obsidian shows BOTH:
+
+```
+Lunian/
+├─ _cleanup_backup/20260620_1709/知識庫/
+│   ├─ ⚖️法律              ← OLD name (still visible!)
+│   ├─ ✍️寫手提示詞          ← OLD name
+│   └─ 🔧提示詞庫            ← OLD name
+└─ 知識庫/
+    ├─ ⚖️法律學習            ← NEW name (user expects this)
+    ├─ 🎬提示詞庫            ← NEW name
+    └─ ...
+```
+
+The user opens Obsidian, sees BOTH sets, and concludes nothing was organized. **This was the root cause of a real session where the user said "我這邊打開一樣沒整理."**
+
+### Fix: Move Backup Dirs OUTSIDE the Vault
+
+Do NOT delete backups — the user may want them. Move them to a location Obsidian won't see:
+
+```bash
+# Move to Desktop or another non-vault location
+mv "$VAULT/_cleanup_backup" "/mnt/c/Users/$USER/Desktop/_vault_backup_cleanup/"
+mv "$VAULT/_optimized_backup" "/mnt/c/Users/$USER/Desktop/_vault_backup_optimized/"
+```
+
+### What to Move vs. Keep at Vault Root
+
+| Keep (vault infrastructure) | Move out (not vault content) |
+|-----------------------------|------------------------------|
+| `.obsidian/` | `_cleanup_backup/` and variants |
+| `copilot/` (if Obsidian Copilot is installed) | `_optimized_backup/` |
+| `知識庫/` (the notes directory) | `_scripts/` (external scripts, not vault notes) |
+| `.git/`, `.gitignore` | |
+| `.stfolder`, `.stignore` (Syncthing) | |
+
+### Pitfalls
+
+1. **Check ALL backup dirs** — there may be multiple: `_cleanup_backup/`, `_optimized_backup/`, plus copies from previous maintenance runs (e.g., `知識庫_backup_20260607/`).
+2. **Do NOT delete — move** — The user may want to recover old files. Moving to Desktop preserves them without cluttering the vault.
+3. **Git state** — If the vault is a Git repo, backing up with `_cleanup_backup/` may have created a `.git/` inside the backup. Moving the entire backup dir is fine; the embedded `.git/` is harmless outside the vault.
+4. **Syncthing backup** — If the vault uses Syncthing, the backup dir may have its own `.stfolder` and `.stignore`. Moving it outside the vault prevents nested-sync confusion.
 
 ### When to Use
 
@@ -294,16 +377,61 @@ rm -rf "$VAULT/☁️收件夾" "$VAULT/Google Cloud" "$VAULT/copilot"
 
 After all files land in the inbox, do a second pass to move the clearly-destined ones:
 
-| Inbox File | Target | Reason |
+| Inbox File / Content Signal | Target | Reason |
 |-----------|--------|--------|
-| Hermes install guide | `🔧代理管理/` | System management |
-| System info / audit | `🔧代理管理/` | System records |
-| Agent dashboard | `🔧代理管理/` | Dashboard |
-| Fraud/legal analysis | `⚖️法律/` | Legal content |
-| AI Agent concepts | `🦞AI代理/` | AI Agent domain |
-| Recipe | `📦其他/` | Miscellaneous |
+| Hermes install / GCP setup / config guide | `🔧代理管理/⚙️ 設定與安裝/` | System management |
+| System info / audit / dashboard | `🔧代理管理/📋 系統報告/` | System records |
+| AI Agent concepts, architecture, OpenClaw | `🔧代理管理/🦞 AI代理/` | Agent knowledge |
+| Daily reports | `🔧代理管理/📅 日報/` | Periodic logs |
+| Fraud/legal analysis | `⚖️法律學習/` or `⚖️智研AI法律/` | Legal content |
+| Obsidian guides, formatting docs | `🎬提示詞庫/✍️ 文案類/` | Writing/formatting prompts |
+| Obsidian Copilot prompts, prompt optimization | `🎬提示詞庫/🛠️ 通用提示詞/` | General prompt library |
+| Grok / Gemini / Seedance video prompts | `🎬提示詞庫/🎥 影片提示詞/` | Video generation prompts |
+| Character/image prompts (chibi, gothic) | `🎬提示詞庫/🖼️ 圖像提示詞/` | Image generation prompts |
+| Notion/copywriting/social-media prompts | `🎬提示詞庫/✍️ 文案類/` | Copywriting |
+| Research reports, Firecrawl, analysis | `🤖多模型委員會開發/` or `📚提示詞工程(學習）/` | Research/analysis |
+| Personal growth, habits, emotional notes | `🪴自我成長/` | Self development |
+| Finance dashboards, account info | `📦雜項/` | Miscellaneous |
+| Recipes, SCP, drama scripts, entertainment | `📦雜項/` | Entertainment / non-essential |
+| Source code projects (src/, tests/, .py) | **Move OUT of vault** to Desktop or project dir | Not Obsidian notes |
 
-What stays in inbox: unnamed placeholders, finance dashboards, anything needing user attention.
+### Third Pass (if needed): Reorganize Merged Target Folders
+
+After inbox classification, the target folders may need internal restructuring if they received files from multiple sources. Two common patterns:
+
+#### Pattern A: Prompt Library Consolidation
+
+When files arrive from ✍️寫手提示詞 + 🔧提示詞庫 + 🎬 Grok Imagine, consolidate into a single `🎬提示詞庫/` with subfolders:
+
+```
+🎬提示詞庫/
+├─ ✍️寫手類/              — Dynamic writer generation systems
+├─ 🎬 Grok Imagine/       — Grok-specific repos (often have README*.md)
+├─ 🎥 影片提示詞/          — Seedance, Gemini, AI video prompts
+├─ 🖼️ 圖像提示詞/          — Image/character generation prompts
+├─ 🛠️ 通用提示詞/          — Prompt factories, system architects, general frameworks
+└─ ✍️ 文案類/             — Obsidian formatting, social-media copywriting
+```
+
+#### Pattern B: Agent Management Consolidation
+
+When files arrive from 🔧代理管理 + 🦞AI代理 + 📋 代理系統報告, consolidate into a single `🔧代理管理/` with subfolders:
+
+```
+🔧代理管理/
+├─ ⚙️ 設定與安裝/          — GCP/KVM configs, SSH keys, install guides, model routing
+├─ 📋 系統報告/            — System audits, dashboards, Dataview reports, canvas diagrams
+├─ 📅 日報/                — Daily agent activity logs
+└─ 🦞 AI代理/             — OpenClaw/AI Agent knowledge, architecture, skill guides
+```
+
+#### Pitfalls
+
+1. **Do NOT auto-file everything** — leave truly ambiguous files in the inbox for the user to decide. Finance dashboards, account info, and mixed-domain documents are good candidates to keep in inbox.
+2. **Check for source-code projects** — directories with `src/`, `tests/`, or non-markdown code files (`.py`, `.js`) are NOT vault notes. Move them out of the vault entirely.
+3. **Update per-directory MOC indexes** — after moving files into a categorized library, check the target subdirectory's `📋 目錄索引.md` and update counts/entries. The old top-level MOC may reference non-existent paths now.
+4. **.txt → .md conversion** — prompt-library `.txt` files from Grok/Seedance repos should be renamed to `.md` in place. Obsidian ignores `.txt`.
+5. **Canvas files** (`.canvas`) are Obsidian-native and should be kept. They contain visual diagrams for system architecture, not junk.
 
 ### Post-Move: Update Directory Indexes (MOC)
 
@@ -801,6 +929,11 @@ For each group, compare sizes first, then content. Keep the version with richer 
 2. **Cron-referenced files** — search for `.py`, `.sh`, `.cmd`, `.ps1`, `.hta` files referencing old directory paths after merge.
 3. **`_old` suffix accumulation** — use `_old` exactly once. If both copies differ and one already has `_old`, skip.
 4. **Wikilink breakage** — every file move/rename breaks `[[wikilink]]` references. Run bulk search-and-replace after structural changes.
+5. **Homepage wikilink path correction** — after structural changes (directory renames, file moves, merges), the homepage (`🏠 知識庫首頁.md`) will have stale wikilink paths. Run a dedicated correction pass:
+   - List all wikilinks in the homepage that reference old directory paths
+   - Replace each old path prefix with the new one (e.g. `🦞AI代理/` → `🔧代理管理/🦞 AI代理/`)
+   - Also check: per-directory `📋 目錄索引.md` files, Dataview queries with `FROM "old/path/"`, and any dashboard/canvas files that reference file paths
+   - Fixing homepage-only is usually enough for user navigation; full vault-wide search-and-replace is reserved for when the structural change is permanent.
 5. **Emoji dirs in WSL** — emoji characters (⚖️) work correctly under `/mnt/c/` paths. No special encoding needed for Windows paths in 2026.
 6. **Offer one comprehensive pass** — Phase E steps interlock, so present as a single operation (unlike Phases A–C).
 
@@ -1263,8 +1396,10 @@ with open(path, 'w') as f:
 
 ## Common Pitfalls (All Phases)
 
-1. **Trusting `OBSIDIAN_VAULT_PATH` without verification** — On Windows WSL, `.env` may define `OBSIDIAN_VAULT_PATH` pointing to a backup directory that was restored from, while the real active Obsidian vault is elsewhere. Always verify by checking Obsidian's `obsidian.json` config for `"open": true`.
-2. **Accidentally deleting `.stfolder`** — A missing `.stfolder` causes Syncthing to stop recognizing the folder. If you moved/cleaned up directories, check `.stfolder` still exists at the vault root after the operation. If gone, recreate with `mkdir -p "$VAULT/.stfolder"`.
+1. **Trusting OBSIDIAN_VAULT_PATH without verification** — On Windows WSL, .env may define OBSIDIAN_VAULT_PATH pointing to a backup directory that was restored from, while the real active Obsidian vault is elsewhere. Always verify by checking Obsidian's obsidian.json config for the vault with "open": true.
+2. **Backup folders shadowing changes** — _cleanup_backup/, _optimized_backup/, or any backup dir at the vault root containing old copies of the vault structure will make it look like nothing changed. Obsidian shows BOTH the new organized folders AND the old backup folders. Run Vault Root Sanitization FIRST — move backup dirs outside the vault before any structural work. This was the root cause of a real user complaint: "我這邊打開一樣沒整理."
+3. **Accidentally deleting .stfolder** — A missing .stfolder causes Syncthing to stop recognizing the folder. If you moved/cleaned up directories, check .stfolder still exists at the vault root after the operation. If gone, recreate with mkdir -p.
+4. **Adding .stfolder to .stignore** — This would prevent Syncthing from detecting the folder at all. .stignore must NOT exclude .stfolder; each device creates its own marker locally.
 3. **Adding `.stfolder` to `.stignore`** — This would prevent Syncthing from detecting the folder at all. `.stignore` must NOT exclude `.stfolder`; each device creates its own marker locally.
 4. **Concatenated exclusion paths in plugin data.json** — two exclusion paths fused without comma separator. Check all three: linter, metadata-menu, omnisearch.
 2. **Linter timestamp key mismatch** — `dateCreated` and `date-created-key` must match. Normalize both to `created`.
