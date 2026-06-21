@@ -195,39 +195,7 @@ G0 啟動（❌ 信心：低）
 
 ---
 
-## 🌐 SaaS 網頁版部署
 
-智研已發展出 SaaS 網頁版（類似法律人網站的 App 體驗），位於桌面 `智研saas版/`。
-
-### 技術架構
-
-```
-使用者瀏覽器 → HTML/JS 前端 → FastAPI 後端 → 法律引擎(engine.py) → LLM API
-                                               ↓
-                                          docs/ 提示詞組合
-```
-
-- **後端**：FastAPI + uvicorn，串接現有 docs/ 法律規格系統
-- **前端**：純 HTML/CSS/JS（法律人風格深色主題），無框架依賴
-- **API 相容**：支援任何 OpenAI 相容 API（DeepSeek / OpenRouter / Gemini）
-
-### API 金鑰整合陷阱
-
-Hermes 安全機制會遮罩所有金鑰輸出，無法從 WSL 提取 API 金鑰給外部服務。設定方式：
-
-1. 複製 `backend/.env.example` → `backend/.env`
-2. **使用者手動填入金鑰**（目前只能用這個方式）
-3. 或改用啟動腳本自動偵測環境變數
-
-### 啟動方式
-
-```bash
-cd /mnt/c/Users/ysga1/Desktop/智研saas版
-bash start.sh
-# 開啟 http://localhost:8000
-```
-
-詳細架構請見 `references/saas-deployment.md`。
 
 ---
 
@@ -271,6 +239,29 @@ ZHIYAN_API_KEY=sk-xxx ZHIYAN_MODEL=deepseek-chat \
 # 背景啟動驗證（Hermes 內啟動用）
 sleep 3 && curl -s http://localhost:8000/api/status
 ```
+
+### ⚠️ WSL/Windows 混合環境陷阱
+
+這個專案的 `.venv` 是從 **WSL 建立的**（Linux 風格，有 `bin/` 而不是 `Scripts/`），但 `🚀 智研SaaS啟動.bat` 是從 **Windows cmd** 跑的，它找的是 `.venv\Scripts\python.exe`，找不到就會失敗。
+
+**症狀**：Uvicorn 從桌面目錄啟動、報 `Could not import module "main"`、舊程序卡在 port 8000。
+
+**解法**：
+1. **一律從 WSL 啟動**（用 `bash start.sh` 或在 `backend/` 下直接跑 uvicorn）
+2. 若 port 8000 被 Windows 端的 Python 程序佔用，從 WSL 用以下命令處理：
+   ```bash
+   # 查出佔用 port 的 Windows 程序
+   powershell.exe -Command "Get-NetTCPConnection -LocalPort 8000 | Select-Object LocalAddress, LocalPort, State, OwningProcess"
+   # 殺掉它
+   powershell.exe -Command "Stop-Process -Id <PID> -Force"
+   ```
+3. 若想改為雙環境相容，刪除舊 `.venv`，從 Windows cmd 重新建立 venv：
+   ```cmd
+   cd C:\Users\ysga1\Desktop\智研saas版\backend
+   python -m venv .venv
+   .venv\Scripts\activate.bat
+   pip install -r requirements.txt
+   ```
 
 ### API 端點
 

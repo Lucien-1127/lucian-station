@@ -123,9 +123,82 @@ Windows apps store config in:
 powershell.exe -Command "Get-Process <name> | Select-Object Id,ProcessName,StartTime,Responding"
 ```
 
+### Killing Windows Processes Holding a Specific Port
+
+WSL's `fuser`/`lsof`/`ss` cannot see processes running on the Windows side. When port 8000 (or any port) is "already in use" but WSL tools show nothing, the process is likely a Windows-side Python/Node/whatever process.
+
+**Step 1: Find the offender**
+```bash
+powershell.exe -Command "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, State, OwningProcess, @{N='ProcessName';E={(Get-Process -Id \$_.OwningProcess -ErrorAction SilentlyContinue).Name}}"
+```
+
+**Step 2: Kill it**
+```bash
+powershell.exe -Command "Stop-Process -Id <PID> -Force"
+```
+
+**Step 3: Verify the port is free**
+```bash
+powershell.exe -Command "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue"
+# Empty output = port is free
+```
+
+**Common scenario**: A Uvicorn/FastAPI server started from Windows that crashed or was Ctrl+C'd, but the process still holds the port in "Bound" state. WSL's `pkill -f uvicorn` won't touch it because it's a Windows process.
+
 ### Syncthing-Specific Investigation
 
 See `references/syncthing-forensics.md` for the pattern of investigating a sync disaster — reading config, parsing the log, determining root cause, and recovery options.
+
+## Fixing Windows CMD Garbled Chinese Text & Crashes
+
+### Symptom
+
+Windows Command Prompt (cmd.exe) shows garbled Chinese characters (mojibake) or crashes immediately when running `.bat` scripts with Chinese/emoji content. Programs that worked before now display `?` boxes, squares, or scrambled text.
+
+### Root Cause: UTF-8 Beta Setting
+
+Windows has a hidden "Beta: Use Unicode UTF-8 for worldwide language support" setting that changes the system ANSI code page (ACP) from the locale's default (950 = Big5 for zh-TW) to 65001 (UTF-8). While this helps some apps, it breaks many Traditional Chinese cmd tools and `.bat` scripts that expect Big5 encoding.
+
+**Where to check:**
+```
+Control Panel → Region → Administrative → Change system locale
+→ "Beta: Use Unicode UTF-8 for worldwide language support"
+```
+
+**Registry check:**
+```powershell
+# If ACP = 65001 → UTF-8 Beta is ON
+Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage' -Name ACP
+```
+
+### Fix: Disable UTF-8 Beta (Requires Admin + Reboot)
+
+```powershell
+# Run as Administrator
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage' -Name 'ACP' -Value '950'
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage' -Name 'OEMCP' -Value '950'
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage' -Name 'MACCP' -Value '950'
+```
+
+After reboot:
+- ACP = 950 (Big5, standard for zh-TW)
+- OEMCP = 950
+- cmd displays Chinese text correctly
+- `chcp` shows 950 by default
+
+**.bat files that need UTF-8 still work** — add `chcp 65001 >nul` at the top of the script to switch code page at runtime.
+
+### Pitfall: Scripts already assume UTF-8
+
+Some modern .bat scripts (like `🚀 智研SaaS啟動.bat`) already have `chcp 65001 >nul` at the top. These will continue to work fine because they explicitly set the code page before displaying Chinese text. The fix only affects scripts that implicitly rely on the system default code page.
+
+### chcp 65001 in .bat while ACP=65001 (double UTF-8 conflict)
+
+**When ACP is already 65001** (UTF-8 mode), adding `chcp 65001 >nul` inside a .bat file is redundant and can make display **worse**: the default cmd console font (新細明體/PMingLiU) does not render all Chinese characters correctly in UTF-8 code page 65001 mode. Characters may show as `?`, boxes, or scattered glyphs even though the encoding is technically correct.
+
+**Fix in the .bat file**: Replace `chcp 65001 >nul` with `chcp 950 >nul` (Big5) when the script runs Chinese text that must display correctly in cmd. The Big5 code page matches the console font and renders all Traditional Chinese characters properly.
+
+Alternatively, omit `chcp` entirely — after the UTF-8 Beta fix, the system default will be 950, which works correctly.
 
 ## File Recovery on Windows
 

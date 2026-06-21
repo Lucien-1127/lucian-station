@@ -1,7 +1,7 @@
 ---
 name: wsl-windows-bridge
 description: Make Hermes Agent (WSL‑installed) accessible from Windows desktop tools — PATH wrappers, cc‑switch integration, cross-platform config bridging.
-version: 1.3.0
+version: 1.4.0
 author: Hermes Agent
 tags: [wsl, windows, cc-switch, cross-platform, bridge, PATH, wrapper, desktop]
 ---
@@ -73,21 +73,26 @@ function hermes { wsl -e $WSL_HERMES $args }
 
 Reload with `. $PROFILE`. Then `gemini` enters chat, `hermes-dash` opens the web UI. See `references/powershell-profile-hermes-shortcuts.md` for full template.
 
-## Mirrored Networking (for Mobile SSH & External Dashboard Access)
+## Mirrored Networking (for Mobile SSH, Dashboard Access & Localhost Forwarding)
 
-When you need to access WSL SSH (port 22) or the Hermes Dashboard (port 8000) from an external device (such as an iPhone on the same Wi-Fi network), the default WSL NAT network makes the WSL IP internal and unreachable.
+When you need to access WSL services (SSH port 22, Hermes Dashboard port 8000, FastAPI port 8000, etc.) from Windows browser or an external device on the same network, the default WSL2 NAT mode may break localhost forwarding. **Symptoms:** server runs and responds to `curl` inside WSL, but `localhost:PORT` times out from Windows browser.
 
-Instead of writing fragile port-forwarding scripts, enable **Mirrored Networking Mode** in Windows. This mirrors Windows network interfaces directly into WSL, making WSL services accessible on the Windows Host's local Wi-Fi IP address.
+Enable **Mirrored Networking Mode** so WSL and Windows share the network namespace — localhost forwarding works, and WSL services become accessible via the Windows host's IP.
 
 ### 1. Enable Mirrored Mode
 
-In **Windows**, edit `C:\Users\<user>\.wslconfig` and add `networkingMode=mirrored` under `[wsl2]`:
+In **Windows**, create/edit `C:\Users\<user>\.wslconfig`:
 
 ```ini
 [wsl2]
 guiApplications=true
 networkingMode=mirrored
 ```
+
+**⚠️ CRITICAL: Use `.wslconfig` (Windows-side), NOT `/etc/wsl.conf` (WSL-side).**
+- `.wslconfig` (`%USERPROFILE%\.wslconfig`) controls global WSL2 settings including `networkingMode`, `memory`, `processors`, `kernel` — this is the **correct** place for `networkingMode=mirrored`.
+- `/etc/wsl.conf` controls per-distro settings (`[boot]`, `[user]`, `[network]`) — it does NOT support a `[wsl2]` section for networking mode.
+- Mistake to avoid: writing `networkingMode=mirrored` into `/etc/wsl.conf` will be silently ignored. Verify the change took effect after restart with: `wsl -e ip route show default` — should show the Windows host's default gateway, not a NAT IP.
 
 ### 2. Restart WSL
 
@@ -102,6 +107,145 @@ Windows Firewall may block incoming connections on Port 22. To allow your iPhone
 ```powershell
 New-NetFirewallRule -Name "WSL_SSH" -DisplayName "WSL SSH Port 22" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 22
 ```
+
+---
+
+## Mirrored Mode Troubleshooting
+
+### Verification — Is Mirrored Actually Active?
+
+After configuring `networkingMode=mirrored` and running `wsl --shutdown`, verify it took effect:
+
+```bash
+# ✅ Mirrored is WORKING → WSL has NO separate IP, only loopback
+ip addr show
+# Expected: only lo (127.0.0.1/8) — NO eth0/eth1 with 172.x or 10.x IP
+
+# ❌ Mirrored is NOT working → WSL has its own IP (NAT mode)
+ip addr show eth1 | grep inet
+# Expected: inet 10.114.205.137/24 — WSL has a separate network interface
+```
+
+**In working mirrored mode:**
+- `localhost:PORT` is shared between Windows and WSL — no port forwarding needed
+- `hostname -I` returns the Windows host's IP, not a WSL-specific IP
+- `curl http://localhost:8000` works from both WSL terminal AND Windows cmd
+
+**In NAT mode (mirrored not active):**
+- WSL has its own IP (e.g., `10.114.205.137/24` or `172.x.x.x`)
+- `curl http://localhost:8000` works from WSL terminal but FAILS from Windows cmd
+- The WSL IP is reachable from Windows but NOT localhost
+
+### Common Failure Modes
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| `ip addr show` shows eth0/eth1 with IP after `wsl --shutdown` | Mirrored config in wrong file | Check `.wslconfig` (Windows-side, `%USERPROFILE%\.wslconfig`) — `networkingMode=mirrored` only works in `.wslconfig`, NOT in `/etc/wsl.conf` |
+| Both `.wslconfig` AND `/etc/wsl.conf` have `networkingMode=mirrored` | Duplicate config may cause silent failure | Remove the `[wsl2]` section from `/etc/wsl.conf` — keep only in `.wslconfig` |
+| WSL version < 2.0.0 | Mirrored requires WSL 2.0.0+ | Run `wsl --update` from Windows PowerShell |
+| After `wsl --shutdown` and restart, still in NAT | WSL VM cache not cleared | `wsl --shutdown`, then `wsl --terminate <distro>`, then restart |
+| Working yesterday, broken today | Windows update reset `.wslconfig` changes | Re-apply `.wslconfig` and re-shutdown |
+
+### Fix: Remove Conflicting Config from /etc/wsl.conf
+
+The `[wsl2]` section with `networkingMode` is **only valid in `.wslconfig`** on Windows. If `/etc/wsl.conf` also contains a `[wsl2]` section, it is **silently ignored** and may cause confusion during debugging.
+
+```bash
+# Check /etc/wsl.conf for [wsl2] section
+grep -n "wsl2" /etc/wsl.conf
+# If found, remove that section — it doesn't belong here
+# The correct location is %USERPROFILE%\.wslconfig (Windows-side)
+```
+
+### Fallback: netsh Port Forwarding (When Mirrored Won't Work)
+
+If mirrored mode refuses to activate (WSL version too old, Windows build incompatibility, or unknown regression), use **netsh port forwarding** as a reliable fallback:
+
+```bash
+# 1. Get the WSL IP
+WSL_IP=$(hostname -I | awk '{print $1}')
+echo "$WSL_IP"  # e.g., 10.114.205.137
+
+# 2. Set up port forwarding (requires Admin rights — UAC prompt)
+powershell.exe -Command "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -Command \"netsh interface portproxy delete v4tov4 listenport=8000 listenaddress=0.0.0.0 2>`$null; netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=''$WSL_IP''; Write-Host (''''✅ Port forwarding set up''''); Start-Sleep -Seconds 2\"'"
+
+# 3. Verify
+powershell.exe -Command "netsh interface portproxy show v4tov4 | findstr 8000"
+
+# 4. Now http://localhost:8000 from Windows browser should work
+```
+
+**Limitations of netsh fallback:**
+- WSL IP changes on every `wsl --shutdown` → must re-run port forwarding
+- Requires UAC/admin elevation each time
+- Not as clean as mirrored mode (which persists across restarts)
+
+**Packaging as a .bat for the desktop:**
+Create a combined .bat that detects WSL IP, sets up port forwarding via UAC, starts the service, and opens browser. Use `chcp 950 >nul` at the top (NOT `chcp 65001`) when the system ACP is 950 to avoid font rendering issues in cmd.
+
+```batch
+@echo off
+title 🚀 AppName啟動 · WSL版
+chcp 950 >nul
+for /f "tokens=1" %%i in ('wsl.exe hostname -I') do set WSL_IP=%%i
+echo Setting up port forwarding...
+powershell -Command "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -Command ...'"
+echo Starting server...
+wsl bash -c "cd '/path/to/project' && source .venv/bin/activate && python -m uvicorn main:app --host 0.0.0.0 --port 8000"
+```
+
+## Testing WSL Service Accessibility from Windows
+
+### Critical: Know Which "localhost" Your Tools Test
+
+When running inside WSL, **Hermes' `browser_navigate` tool tests WSL's localhost, NOT the Windows host's localhost.** This is a common source of false positives:
+
+```bash
+# From Hermes' browser: tests WSL's localhost → WILL work for WSL services
+browser_navigate(url="http://localhost:8000/")  # ✅ Works from inside WSL
+
+# But the USER's Chrome/Edge on Windows: tests WINDOWS localhost
+# → WILL FAIL if mirrored mode is not active or port forwarding not set up
+```
+
+**✅ Correct verification procedure** when the user says "localhost doesn't work":
+
+```bash
+# Step 1: Verify service is running inside WSL
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/   # Should be 200
+
+# Step 2: Test from Windows side via cmd.exe curl
+cmd.exe /c "curl -s --max-time 5 http://localhost:8000/ -o C:\Users\%USERNAME%\Desktop\_test.html -w %%{http_code}"
+# Check if file was created with content
+ls -la "/mnt/c/Users/$(whoami)/Desktop/_test.html"  # Should be > 0 bytes
+cat "/mnt/c/Users/$(whoami)/Desktop/_test.html" | head -5
+
+# Step 3: Also test via WSL IP
+WSL_IP=$(hostname -I | awk '{print $1}')
+cmd.exe /c "curl -s --max-time 5 http://$WSL_IP:8000/ -o C:\Users\%USERNAME%\Desktop\_test2.html"
+
+# Step 4: Clean up temp files
+rm -f "/mnt/c/Users/$(whoami)/Desktop/_test.html" "/mnt/c/Users/$(whoami)/Desktop/_test2.html"
+```
+
+**Results interpretation:**
+
+| Windows curl | Browser | Likely cause |
+|---|---|---|
+| ✅ Works | ❌ Times out | **Browser proxy/DNS issue** — clear Chrome's DNS cache (`chrome://net-internals/#dns` → Clear host cache), check proxy settings |
+| ✅ Works | ✅ Works | Mirrored/networking is fine, user may have tried before service was ready |
+| ❌ Fails | ❌ Times out | **Networking issue** — mirrored not active, need port forwarding or fix |
+| ❌ (localhost) but ✅ (WSL IP) | ❌ | Mirrored not active — use WSL IP or set up netsh forwarding |
+
+### Browser-Specific Fixes When Networking is Fine but Browser Fails
+
+If `cmd.exe /c curl http://localhost:PORT/` works but the browser times out:
+
+1. **Chrome DNS cache**: `chrome://net-internals/#dns` → click "Clear host cache"
+2. **Chrome proxy settings**: Settings → System → Open computer's proxy settings → "Automatically detect settings" ON, everything else OFF
+3. **IPv6 issue**: Try `http://127.0.0.1:PORT/` instead of `http://localhost:PORT/`
+4. **Socket pool flush**: `chrome://net-internals/#sockets` → "Flush socket pools"
+5. **Incognito window**: Rules out extension interference
 
 ---
 
@@ -266,6 +410,14 @@ It cannot "open" Claude Code, Codex, or Hermes. It manages their config files. U
 - **`%*` in cmd.exe** passes all arguments correctly for basic cases; complex quoting may need `%*` passed through `wsl.exe` carefully.
 - **`wsl.exe ~/...`** may not expand `~` in all contexts — prefer the absolute WSL path `/home/<user>/...`.
 - **cc‑switch v3.16.1** on Windows stores API key as `***` in the SQLite DB once saved — the actual key cannot be recovered from the DB after first write.
+- **Python venv created from WSL is Linux-style** (uses `bin/` not `Scripts/`). If a Windows `.bat` start script calls `.venv\Scripts\activate.bat`, it will fail because the venv has `bin/activate` instead. Uvicorn then runs from the wrong directory and can't find `main:app`. **Fix:** Either (a) always start the project from WSL using the project's `.sh` script, or (b) delete the WSL-created `.venv` and recreate it from Windows cmd: `python -m venv .venv && .venv\Scripts\activate.bat && pip install -r requirements.txt`.
+
+- **Diagnostic pattern: mixed-venv "Could not import module" error**: When a FastAPI/Uvicorn server errors with `Could not import module "main"` but `main.py` exists in the backend directory:
+  1. Check the working directory in the error message — if Uvicorn watched `C:\Users\...\Desktop` instead of `C:\Users\...\backend`, the `cd` in the .bat failed.
+  2. Check the venv structure: `ls backend/.venv/bin/activate` (Linux/WSL style) vs `backend/.venv\Scripts\activate.bat` (Windows style).
+  3. If the venv was created on the opposite OS, the .bat's venv detection fails silently — it skips activation and runs from the wrong CWD.
+  4. Check for leftover Windows processes holding the port: `powershell.exe -Command "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue"` → If "Bound" state, kill with `Stop-Process -Id <PID> -Force`.
+  5. Solution: either run the server from WSL, or recreate the venv on the correct OS.
 - **Dashboard first‑time build hangs.** `hermes dashboard` needs a pre‑built `web/dist/` directory. On first run it builds from source via npm, taking 5–60+ seconds with no progress feedback — the user sees only "Building web UI..." with no indicator. **Fix:** pre‑build once from WSL:
   ```bash
   cd ~/.hermes/hermes-agent/web && npm install && npm run build
@@ -284,7 +436,7 @@ It cannot "open" Claude Code, Codex, or Hermes. It manages their config files. U
 3. User clicks "Launch terminal" → fails: `'hermes' is not recognized`
 4. Agent creates `hermes.cmd`/`hermes.ps1` wrapper in a Windows PATH dir → launch works
 5. **Add PowerShell profile shortcuts** (NEW: 2026-06-06):
-   - Edit `$PROFILE` (typically `C:\\Users\\<user>\\Documents\\PowerShell\\Microsoft.PowerShell_profile.ps1`)
+   - Edit `$PROFILE` (typically `C:\Users\<user>\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`)
    - Add functions for common Hermes commands — **use absolute WSL paths, NOT `~`**:
      ```powershell
      $WSL_HERMES = "/home/<user>/.local/bin/hermes"
@@ -338,9 +490,47 @@ For accessing Hermes Agent from an iPhone/iPad SSH client (e.g., Termius, Blink 
    alias hermes-dash="echo '🔗 Dashboard URL: http://<Windows_IP>:8000'; hermes dashboard --skip-build"
    alias hermes-models="grep 'default:' ~/.hermes/config.yaml; grep 'provider:' ~/.hermes/config.yaml"
    ```
-5. **Connect from iPhone SSH Client:**\n   - **Host:** The Windows Host's local Wi-Fi IP (e.g. `192.168.1.111`).\n   - **Port:** `22`\n   - **User:** `<wsl-username>`\n   - **Auth:** Password or SSH Key. (For SSH Keys, generate a key pair in the iPhone app, then copy the public key to WSL's `~/.ssh/authorized_keys` with permissions 700 on `~/.ssh` and 600 on `authorized_keys`).\n\n---\n\n## GitHub Push Bridge (WSL → Windows Git Credential Manager)\n\nWhen WSL-native `git push` fails because SSH keys aren't added to GitHub and HTTPS prompts for a password (which GitHub no longer accepts for Git operations), **Windows Git may have cached credentials** via Git Credential Manager (GCM), GitHub Desktop, or the Windows Credential Manager.\n\n### The Bridge Pattern\n\nInstead of setting up SSH keys inside WSL or generating PAT tokens, copy the repo to the Windows filesystem and push via Windows Git:\n\n```bash\n# Within WSL:\ncp -r /tmp/repo-name \"/mnt/c/Users/<user>/Desktop/repo-name\"\ncmd.exe /c \"git -C C:\\Users\\<user>\\Desktop\\repo-name push origin main\"\n```\n\n### When to Use\n\n- WSL has a valid SSH key pair but the **public key has not been added to the GitHub account**.\n- GitHub no longer accepts password authentication over HTTPS.\n- Installing `gh` CLI or generating a PAT is not desirable for a one-time push.\n\n### When Not to Use\n\n- For frequent pushes, set up SSH key authentication properly from WSL: `ssh-keygen -t ed25519 -C \"your@email.com\"`, then add `~/.ssh/id_ed25519.pub` to GitHub Settings → SSH and GPG keys.\n\n### Pitfalls\n\n1. **Symlinks and permissions** — copying from WSL to `/mnt/c/` preserves file modes but Windows Git may reset the executable bit. For script files, re-apply `chmod +x` on the WSL copy.\n2. **Large repos** — copying 1000+ files over the 9p protocol is slow. For frequent pushes, set up SSH keys in WSL instead.\n3. **Emoji filenames** — Windows Git handles Unicode filenames correctly (including emoji like ⚖️, 🏰). No encoding workarounds are needed on modern Windows 11.\n\n## Running Windows Commands from WSL (bash)
+5. **Connect from iPhone SSH Client:**
+   - **Host:** The Windows Host's local Wi-Fi IP (e.g. `192.168.1.111`).
+   - **Port:** `22`
+   - **User:** `<wsl-username>`
+   - **Auth:** Password or SSH Key. (For SSH Keys, generate a key pair in the iPhone app, then copy the public key to WSL's `~/.ssh/authorized_keys` with permissions 700 on `~/.ssh` and 600 on `authorized_keys`).
 
-When you need to run Windows-native commands (CMD, PowerShell, or access Windows-localhost services) from within a WSL bash session, three traps arise and proven workarounds exist.
+---
+
+## GitHub Push Bridge (WSL → Windows Git Credential Manager)
+
+When WSL-native `git push` fails because SSH keys aren't added to GitHub and HTTPS prompts for a password (which GitHub no longer accepts for Git operations), **Windows Git may have cached credentials** via Git Credential Manager (GCM), GitHub Desktop, or the Windows Credential Manager.
+
+### The Bridge Pattern
+
+Instead of setting up SSH keys inside WSL or generating PAT tokens, copy the repo to the Windows filesystem and push via Windows Git:
+
+```bash
+# Within WSL:
+cp -r /tmp/repo-name "/mnt/c/Users/<user>/Desktop/repo-name"
+cmd.exe /c "git -C C:\Users\<user>\Desktop\repo-name push origin main"
+```
+
+### When to Use
+
+- WSL has a valid SSH key pair but the **public key has not been added to the GitHub account**.
+- GitHub no longer accepts password authentication over HTTPS.
+- Installing `gh` CLI or generating a PAT is not desirable for a one-time push.
+
+### When Not to Use
+
+- For frequent pushes, set up SSH key authentication properly from WSL: `ssh-keygen -t ed25519 -C "your@email.com"`, then add `~/.ssh/id_ed25519.pub` to GitHub Settings → SSH and GPG keys.
+
+### Pitfalls
+
+1. **Symlinks and permissions** — copying from WSL to `/mnt/c/` preserves file modes but Windows Git may reset the executable bit. For script files, re-apply `chmod +x` on the WSL copy.
+2. **Large repos** — copying 1000+ files over the 9p protocol is slow. For frequent pushes, set up SSH keys in WSL instead.
+3. **Emoji filenames** — Windows Git handles Unicode filenames correctly (including emoji like ⚖️, 🏰). No encoding workarounds are needed on modern Windows 11.
+
+## Running Windows Commands from WSL (bash)
+
+When you need to run Windows-native commands (CMD, PowerShell, or access Windows-localhost services) from within a WSL bash session, several traps arise and proven workarounds exist.
 
 ### Trap 1: CMD + Chinese / Unicode paths
 
@@ -392,7 +582,7 @@ powershell.exe -ExecutionPolicy Bypass -File "C:\Users\<user>\AppData\Local\Temp
 - Use `-File` not `-Command` to avoid inline parsing issues
 - Always provide the Windows-style path to `-File`
 
-### Trap 4: WSL2 cannot launch Windows GUI installers (but CAN launch installed apps)
+### Trap 3: WSL2 cannot launch Windows GUI installers (but CAN launch installed apps)
 
 **Problem:** From inside WSL2, launching an interactive Windows GUI installer that needs UAC/admin elevation (e.g. Recuva installer) will fail. However, launching an **already-installed GUI application** that does not request elevation WORKS via `Start-Process`.
 
@@ -407,7 +597,7 @@ powershell.exe -ExecutionPolicy Bypass -File "C:\Users\<user>\AppData\Local\Temp
 | **GUI installer** (needs admin) | `winget install --silent` | ⚠️ Downloads succeed, but GUI install step hangs |
 | **GUI installer** (needs admin) | `[System.Diagnostics.Process]::Start(...)` | ❌ Hangs from WSL context |
 
-**Root cause:** WSL2 processes run in a separate PID namespace and cannot create elevated Windows GUI windows. However, `Start-Process` CAN spawn non-elevated GUI processes into the Windows session (tested with Recuva).
+**Root cause:** WSL2 processes run in a separate PID namespace and cannot create elevated Windows GUI windows. However, `Start-Process` CAN spawn non-elevated GUI processes into the Windows session.
 
 **Workaround for installers — create a .bat file on the Windows Desktop:**
 
@@ -445,7 +635,7 @@ powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "Get-Process app* -Er
 **Alternative — use pre-portable versions when available:**
 Some tools offer portable/zipped versions (e.g. Recuva Portable). The portable `.exe` runs without installation — but the same installer limitation applies. You still need the .bat workaround for portable installers.
 
-### Trap 5: Windows-localhost services unreachable from WSL2
+### Trap 4: Windows-localhost services unreachable from WSL2
 
 **Problem:** A Windows service bound to `127.0.0.1:PORT` (Windows loopback) is **not** reachable from WSL2's network stack. WSL2 has its own separate `127.0.0.1`.
 
@@ -468,23 +658,7 @@ The agent's browser tools also run inside WSL's network stack, so they can't rea
 2. Reading the application's log files directly from `/mnt/c/`
 3. If you must control the GUI remotely, set the Windows service to bind to `0.0.0.0` or use `netsh interface portproxy`
 
-### Specific: Syncthing log investigation
-
-Syncthing logs activity to `%LOCALAPPDATA%\Syncthing\syncthing.log`. From WSL:
-```
-# Read via /mnt/c/ mount
-read_file /mnt/c/Users/<user>/AppData/Local/Syncthing/syncthing.log
-```
-
-Key log patterns to look for:
-- `"Deleted file"` — files removed by sync (count with `grep -c`)
-- `"Peer has a new index ID"` — remote side sent a different file index (often means conflict)
-- `"Failed to delete directory"` with `"contents are probably ignored"` — directories that survived
-- `<versioning>` in `config.xml` — if empty/no type attribute, Syncthing kept NO backups
-
-See `references/syncthing-data-loss-investigation.md` for a full investigation recipe.
-
----
+*Note: For the reverse direction (WSL service accessible from Windows browser), see the "Mirrored Mode Troubleshooting" and "Testing WSL Service Accessibility from Windows" sections above.*
 
 ## Section D: Windows Launcher Strategies
 
@@ -539,7 +713,7 @@ HTA can produce pretty dashboards but has severe reliability issues. **Do not re
 
 | Pitfall | Symptom | Fix |
 |---------|---------|-----|
-| External CDNs fail silently | Page renders blank (font load halts HTML parsing) | System fonts only: `font-family: \"Segoe UI\", \"Microsoft JhengHei\", sans-serif` |
+| External CDNs fail silently | Page renders blank (font load halts HTML parsing) | System fonts only: `font-family: "Segoe UI", "Microsoft JhengHei", sans-serif` |
 | Mixed VBScript + HTML encoding errors | Parsing errors, buttons don't respond | Use pure VBScript only, or switch to Batch entirely |
 | JavaScript unreliability | Modern JS (async/await, ES6) expectations fail | Rewrite in pure VBScript, or use Batch |
 | CSS framework failures | CSS Grid, Flexbox unreliable | Simple tables or inline-block layouts only |
@@ -604,6 +778,7 @@ Key details:
 - `hermes-agent` skill — general Hermes config (protected/bundled)
 - `honcho` skill — memory provider setup
 - `powershell-wsl-bridge` — calling WSL commands FROM PowerShell (the reverse direction)
+- `references/mixed-venv-server-diagnostics.md` — diagnosing "Could not import module 'main'" from mixed WSL/Windows venv
 - `references/cc-switch-db-schema.md` — full cc‑switch database schema
 - `references/mirrored-networking-iphone-ssh.md` — Full walkthrough for iPhone SSH and Mirrored Networking setup
 - `references/mobile-ssh-wsl-configuration.md` — detailed mobile/iPhone SSH configuration guide via Mirrored Networking
