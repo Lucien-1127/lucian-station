@@ -2,7 +2,7 @@
 name: windows-host-operations
 title: Windows Host Operations from WSL
 description: Patterns for performing Windows-side operations from WSL — software installation, file management, GUI process launch, system investigation, and file recovery. Complements powershell-wsl-bridge (which covers WSL→PowerShell) with the reverse direction.
-version: 1.0.0
+version: 1.1.0
 trigger: "User asks you to install, investigate, or modify something on the Windows host while you are running inside WSL. Downloading software, reading Windows app logs/configs, launching GUI tools, performing file recovery, or cleaning up Windows files."
 tags: [wsl, windows, devops, cross-platform, administration]
 platforms: [wsl, linux]
@@ -191,6 +191,29 @@ After reboot:
 ### Pitfall: Scripts already assume UTF-8
 
 Some modern .bat scripts (like `🚀 智研SaaS啟動.bat`) already have `chcp 65001 >nul` at the top. These will continue to work fine because they explicitly set the code page before displaying Chinese text. The fix only affects scripts that implicitly rely on the system default code page.
+
+### 🔴 CRITICAL Pitfall: Fix scripts must be pure English
+
+When ACP=65001, **the user's CMD displays ALL Chinese characters as garbled text**. This means:
+
+- The fix script itself **must not contain any Chinese characters** — the user cannot read them
+- Instructions like "按「是(Y)」" or "重新開機" show as unreadable squares/boxes
+- The filename should use English + emoji (Explorer renders emoji correctly), not Chinese characters
+
+**Correct approach:**
+
+1. Use `chcp 437 >nul` at the top of the fix script (switch to US English code page)
+2. Write ALL instructions in English
+3. Call `powershell` directly (NOT `wsl powershell.exe`) — `.bat` files run in Windows cmd context
+4. See `references/cmd-fix-pure-english-script.md` for the correct template
+
+**Common error: `wsl powershell.exe` prefix**
+
+From a `.bat` file running in Windows cmd, do NOT use `wsl powershell.exe -Command "..."`. The `wsl` prefix causes the command to run inside WSL instead of Windows, which either fails silently or runs the wrong script. Just use `powershell -Command "..."` directly.
+
+**Common error: `chcp 65001` in the fix script**
+
+Do NOT use `chcp 65001` in the fix script itself. The console font (PMingLiU) renders Chinese poorly under UTF-8. Use `chcp 437` for pure English output, or `chcp 950` only AFTER the fix has been applied and system ACP is back to 950.
 
 ### chcp 65001 in .bat while ACP=65001 (double UTF-8 conflict)
 

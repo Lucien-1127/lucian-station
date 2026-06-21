@@ -1,7 +1,7 @@
 ---
 name: wsl-windows-bridge
 description: Make Hermes Agent (WSL‑installed) accessible from Windows desktop tools — PATH wrappers, cc‑switch integration, cross-platform config bridging.
-version: 1.4.0
+version: 1.5.0
 author: Hermes Agent
 tags: [wsl, windows, cc-switch, cross-platform, bridge, PATH, wrapper, desktop]
 ---
@@ -241,11 +241,28 @@ rm -f "/mnt/c/Users/$(whoami)/Desktop/_test.html" "/mnt/c/Users/$(whoami)/Deskto
 
 If `cmd.exe /c curl http://localhost:PORT/` works but the browser times out:
 
-1. **Chrome DNS cache**: `chrome://net-internals/#dns` → click "Clear host cache"
-2. **Chrome proxy settings**: Settings → System → Open computer's proxy settings → "Automatically detect settings" ON, everything else OFF
+1. **Chrome/Edge DNS cache**: `chrome://net-internals/#dns` → click "Clear host cache"
+2. **Chrome/Edge proxy settings**: Settings → System → Open computer's proxy settings → "Automatically detect settings" ON, everything else OFF
 3. **IPv6 issue**: Try `http://127.0.0.1:PORT/` instead of `http://localhost:PORT/`
 4. **Socket pool flush**: `chrome://net-internals/#sockets` → "Flush socket pools"
 5. **Incognito window**: Rules out extension interference
+
+### Brave Browser-Specific Pitfalls
+
+Brave Browser has three additional protections that block localhost HTTP connections by default:
+
+1. **Brave Shields** — Click the 🛡️ icon next to the URL bar → set to "Shields Down" (or `--disable-web-security` flag)
+2. **Secure DNS** — Brave Settings → Security → "Use secure DNS" → turn OFF (or use `--disable-features="BraveSecureDns"`)
+3. **HTTPS-Only mode** — Brave Settings → Security → "Always use secure connections" → turn OFF
+
+**Launch Brave with bypass flags from cmd/bat:**
+```batch
+start brave --disable-web-security --allow-insecure-localhost http://127.0.0.1:8000/
+```
+
+**Note:** `--allow-insecure-localhost` only works for `127.0.0.1`, NOT for `localhost` (which may resolve to `::1` IPv6). Always use `http://127.0.0.1:PORT/` with this flag.
+
+**Best practice for Brave users:** Create a separate desktop `.bat` that launches Brave with these flags + auto-starts the WSL service. Keep all text in English (see `windows-host-operations` skill for the pure-English script pattern — if the user's CMD has garbled encoding, Chinese text in the .bat will be unreadable).
 
 ---
 
