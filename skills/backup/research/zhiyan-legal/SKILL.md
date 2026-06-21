@@ -195,6 +195,97 @@ G0 啟動（❌ 信心：低）
 
 ---
 
+## 🌐 SaaS 網頁版部署
+
+智研已發展出 SaaS 網頁版（類似法律人網站的 App 體驗），位於桌面 `智研saas版/`。
+
+### 技術架構
+
+```
+使用者瀏覽器 → HTML/JS 前端 → FastAPI 後端 → 法律引擎(engine.py) → LLM API
+                                               ↓
+                                          docs/ 提示詞組合
+```
+
+- **後端**：FastAPI + uvicorn，串接現有 docs/ 法律規格系統
+- **前端**：純 HTML/CSS/JS（法律人風格深色主題），無框架依賴
+- **API 相容**：支援任何 OpenAI 相容 API（DeepSeek / OpenRouter / Gemini）
+
+### API 金鑰整合陷阱
+
+Hermes 安全機制會遮罩所有金鑰輸出，無法從 WSL 提取 API 金鑰給外部服務。設定方式：
+
+1. 複製 `backend/.env.example` → `backend/.env`
+2. **使用者手動填入金鑰**（目前只能用這個方式）
+3. 或改用啟動腳本自動偵測環境變數
+
+### 啟動方式
+
+```bash
+cd /mnt/c/Users/ysga1/Desktop/智研saas版
+bash start.sh
+# 開啟 http://localhost:8000
+```
+
+詳細架構請見 `references/saas-deployment.md`。
+
+---
+
+## 🌐 SaaS 網頁版部署
+
+智研已發展出 SaaS 網頁版（類似法律人網站的 App 體驗），位於桌面 `智研saas版/`。
+
+### 技術架構
+
+```
+使用者瀏覽器 → HTML/JS 前端 → FastAPI 後端 → 法律引擎(engine.py) → LLM API
+                                               ↓
+                                          docs/ 提示詞組合
+```
+
+- **後端**：FastAPI + uvicorn，串接現有 docs/ 法律規格系統
+- **前端**：純 HTML/CSS/JS（法律人風格深色主題），無框架依賴
+- **API 相容**：支援任何 OpenAI 相容 API（DeepSeek / OpenRouter / Gemini）
+
+### API 金鑰整合
+
+**⚠️ 重要**：Hermes 安全機制會遮罩所有金鑰輸出（terminal、read_file、base64 都被遮罩），無法從 WSL 提取 API 金鑰給外部服務。設定方式：
+
+1. 複製 `backend/.env.example` → `backend/.env`
+2. **使用者手動填入金鑰**（目前唯一可靠方式）
+3. 或在啟動指令行以 inline env var 傳入
+
+### 啟動方式
+
+```bash
+# 一般啟動（start.sh 會自動建立 venv + 安裝 deps）
+cd /mnt/c/Users/ysga1/Desktop/智研saas版
+bash start.sh
+# 開啟 http://localhost:8000
+
+# 快速測試（直接餵 env var 跳過 .env）
+cd /mnt/c/Users/ysga1/Desktop/智研saas版/backend
+ZHIYAN_API_KEY=sk-xxx ZHIYAN_MODEL=deepseek-chat \
+  python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+# 背景啟動驗證（Hermes 內啟動用）
+sleep 3 && curl -s http://localhost:8000/api/status
+```
+
+### API 端點
+
+| 端點 | 方法 | 說明 |
+|------|------|------|
+| `/api/status` | GET | 系統狀態（docs_loaded、model） |
+| `/api/chat` | POST | 法律 AI 對話（message, temperature, max_tokens） |
+| `/api/reload` | POST | 重新載入 docs/ 法律文件 |
+
+> 實際載入 ~86 份 .md 規格文件（非說明文宣的 110+，部分目錄含非 .md 文件）。
+
+詳細架構請見 `references/saas-deployment.md`（位於 research/zhiyan-legal 技能下）。
+
+---
+
 ## 📂 完整技能文件
 
 GitHub: https://github.com/Lucien-1127/zhiyan-legal
