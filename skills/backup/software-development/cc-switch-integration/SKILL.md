@@ -159,9 +159,150 @@ cronjob action=update job_id=<id> deliver="telegram:<chat_id>"
 
 Valid chat IDs from `~/.hermes/channel_directory.json`.
 
+## Reverse Sync: Hermes CLI → cc-switch (Desktop GUI)
+
+When the user asks to move CLI Hermes data (settings, providers, skills) INTO the desktop GUI version (cc-switch), you write Hermes CLI config data into cc-switch's SQLite database.
+
+**_NOTE:_** This is the OPPOSITE direction from the standard cc-switch → CLI flow. The user may say "把我的 CLI 備份搬到桌面版" or "同步到桌面版".
+
+### Step 1: Discover what's already in cc-switch
+
+```python
+import sqlite3, json
+db = '/mnt/c/Users/<user>/.cc-switch/cc-switch.db'
+conn = sqlite3.connect(db)
+c = conn.cursor()
+
+# What providers does cc-switch know about for Hermes?
+c.execute("SELECT id, name, settings_config FROM providers WHERE app_type='hermes'")
+for r in c.fetchall():
+    cfg = json.loads(r[2])
+    print(f"  {r[0]}: {cfg.get('base_url')} | key={'✓' if cfg.get('api_key','') else '✗'}")
+
+# What skills are already registered?
+c.execute("SELECT id, name, enabled_hermes FROM skills ORDER BY name")
+for r in c.fetchall():
+    print(f"  {r[0]} | hermes={r[2]}")
+conn.close()
+```
+
+### Step 2: Identify gaps from Hermes CLI side
+
+Read `~/.hermes/config.yaml` for the `providers:` section — those are the CLI-side named providers. Check `.env` for the actual API keys. Compare with cc-switch:
+
+- CLI providers not in cc-switch → add them (use INSERT, not UPDATE — cc-switch uses compound PK `(id, app_type)`)
+- CLI skills not in cc-switch → add as `local:` entries
+
+### Step 3: Add missing providers to cc-switch DB
+
+IMPORTANT: cc-switch's `providers` table has a compound primary key `(id, app_type)` — both columns together must be unique. Always use INSERT with explicit columns:
+
+```python
+import sqlite3, json
+conn = sqlite3.connect('/mnt/c/Users/<user>/.cc-switch/cc-switch.db')
+c = conn.cursor()
+
+# For a provider with no API key (local models like Ollama):
+new_provider = {
+    "name": "ollama",                      # internal ID, lowercase-hyphens
+    "base_url": "http://localhost:11434/v1",
+    "api_key": "",                         # empty for local models
+    "api_mode": "chat_completions",
+    "models": []
+}
+c.execute(
+    "INSERT INTO providers (id, name, app_type, settings_config) VALUES (?, ?, 'hermes', ?)",
+    ("ollama", "Ollama (Local)", json.dumps(new_provider))
+)
+conn.commit()
+conn.close()
+```
+
+### Step 4: Import ALL Hermes CLI skills into cc-switch
+
+cc-switch's `skills` table stores entries with `id = "local:<skill_name>"` for filesystem-based skills. The Hermes CLI skills are organized as `~/.hermes/skills/<category>/<skill_name>/SKILL.md`.
+
+Write a temp `.py` script (do NOT use inline `-c` with sqlite3 — see Pitfalls):
+
+```python
+import sqlite3, os, time
+
+db = '/mnt/c/Users/<user>/.cc-switch/cc-switch.db'
+skills_dir = '/home/<user>/.hermes/skills'
+now = int(time.time())
+
+conn = sqlite3.connect(db)
+c = conn.cursor()
+
+# Clean old entries first
+c.execute("DELETE FROM skills WHERE id LIKE 'local:%'")
+
+added = 0
+for cat in sorted(os.listdir(skills_dir)):
+    cat_path = os.path.join(skills_dir, cat)
+    if not os.path.isdir(cat_path):
+        continue
+    for skill_name in sorted(os.listdir(cat_path)):
+        skill_path = os.path.join(cat_path, skill_name)
+        skill_md = os.path.join(skill_path, 'SKILL.md')
+        if not os.path.isfile(skill_md):
+            continue
+
+        # Read description from SKILL.md frontmatter
+        desc = skill_name
+        with open(skill_md, 'r') as f:
+            for line in f:
+                if line.startswith('description:'):
+                    desc = line.split(':', 1)[1].strip().strip("'\"")
+                    break
+
+        c.execute(
+            "INSERT INTO skills (id, name, description, directory, enabled_hermes, installed_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
+            (f"local:{skill_name}", skill_name, desc, skill_path, now, now)
+        )
+        added += 1
+
+conn.commit()
+print(f"Imported {added} skills to cc-switch ✓")
+conn.close()
+```
+
+Run it with: `python3 /tmp/sync_cc_skills.py`
+
+### Step 5: Also back up the repo to Windows Desktop
+
+The user often wants a Windows-accessible copy of the full backup repo. Rsync works across the `/mnt/c/` mount:
+
+```bash
+cd ~/lucian-station
+rsync -av --delete --exclude='.git/' --exclude='sync.log' ./ /mnt/c/Users/<user>/Desktop/lucian-station/
+```
+
+### Step 6: Verify the sync
+
+```bash
+python3 -c "
+import sqlite3, json
+conn = sqlite3.connect('/mnt/c/Users/<user>/.cc-switch/cc-switch.db')
+c = conn.cursor()
+c.execute(\"SELECT id, name, settings_config FROM providers WHERE app_type='hermes'\")
+print('=== Providers ===')
+for r in c.fetchall():
+    cfg = json.loads(r[2])
+    print(f'  {r[0]} | key={\"✓\" if cfg.get(\"api_key\",\"\") else \"✗\"}')
+c.execute('SELECT COUNT(*) FROM skills WHERE enabled_hermes=1')
+print(f'\\nHermes-enabled skills: {c.fetchone()[0]}')
+conn.close()
+"
+```
+
+Then tell the user to open cc-switch GUI and verify. Note: cc-switch caches its display; a GUI restart may be needed for new entries to appear.
+
+---
+
 ## Batch Sync: All cc-switch Providers → Hermes
 
-When the user asks to sync everything, extract all hermes-type providers from cc-switch's DB and write them into Hermes config with `hermes config set`:
+When the user asks to sync everything from the desktop GUI into the CLI, extract all hermes-type providers from cc-switch's DB and write them into Hermes config with `hermes config set`:
 
 ### Step 1: Extract providers and keys from cc-switch DB
 
@@ -244,6 +385,28 @@ hermes config show           # Quick check (note: providers section won't show h
 read_file ~/.hermes/config.yaml offset=1 limit=20  # Verify providers were written
 rm -f /tmp/cc_sync_*.key /tmp/cc_sync_*.json
 ```
+
+## Tips: Use temp .py files, not inline -c strings
+
+Writing SQLite queries with JSON blobs through `terminal("python3 -c \"...\"")` breaks on nested quotes — the JSON's double quotes and Python's string delimiters fight each other. The shell also strips or mangles complex quoting.
+
+**WRONG** (will break on JSON or multi-line):
+```bash
+terminal('python3 -c "import sqlite3, json; ... json.dumps({\"key\": \"value\"}) ..."')
+```
+
+**RIGHT** (write a temp file, run it):
+```python
+from hermes_tools import write_file, terminal
+write_file(path='/tmp/sync_script.py', content='''...your Python code...''')
+terminal('python3 /tmp/sync_script.py')
+```
+
+The temp file approach also makes debugging far easier — you can inspect `/tmp/sync_script.py`, rerun it manually, and iterate without re-prompting the LLM.
+
+## Reference files
+
+`references/reverse-sync-example.md` — full copy-pasteable scripts from a live reverse-sync session (providers + skills import + desktop backup), including the exact SQL queries, table schemas, and issues encountered.
 
 ## Pitfalls
 

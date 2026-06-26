@@ -3,6 +3,7 @@ apple
 autonomous-ai-agents
 bedrock-reasoning
 bedrock-system
+computer-use
 creative
 data-science
 devops

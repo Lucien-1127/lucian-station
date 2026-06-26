@@ -531,12 +531,123 @@ for g in json.load(sys.stdin):
     print(f\"  {g['id']}  {g['description'] or '(no desc)':40}  {files}\")"
 ```
 
+## 11. Adopt a Local Folder into an Existing GitHub Repo
+
+When you have a local project folder (no git history) that should merge into an existing GitHub repo — not pushed as a new repo, but integrated with an established history.
+
+### 🚫 Don't
+
+```bash
+# This only works for EMPTY repos or NEW project repos:
+gh repo create name --source . --public --push
+```
+
+### ✅ Do (step by step)
+
+```bash
+cd /path/to/local-folder
+
+# 1. Init git, point to the existing remote
+git init
+git remote add origin <remote-url>   # HTTPS or git@github.com:owner/repo.git
+git fetch origin                     # pulls remote history
+
+# 2. Rename branch to match remote (usually 'main')
+git branch -m main
+
+# 3. Stage and commit all local files as initial history
+git add -A
+git commit -m "feat: initial local state before merge"
+
+# 4. Merge remote into local with --allow-unrelated-histories
+# The --no-commit flag lets you inspect/resolve before committing
+git merge origin/main --allow-unrelated-histories --no-commit
+```
+
+At this point you'll get conflicts on files that exist in both places.
+
+### Conflict Resolution Strategy
+
+```bash
+# Strategy: accept remote version for files in both repos,
+# keep local version for files that only exist locally.
+
+# Bulk-accept remote version for all conflicting/shared files
+git checkout origin/main -- .
+
+# Verify no unmerged files remain
+git ls-files --unmerged                # should be empty
+
+# Add everything (remote files + local unique files)
+git add -A
+
+# Complete the merge
+git commit -m "Merge: integrate local folder with GitHub repo"
+```
+
+**When to use this strategy:** The remote is the authoritative source (latest commits, tested), and the local folder has additions (new features, config, scripts) that don't exist in the remote.
+
+### Pushing
+
+```bash
+# Push to GitHub
+git push origin main
+```
+
+### 🚧 Authentication Pitfall: Fine-Grained PATs
+
+**Symptom:** `git push` returns `403 Permission denied` even though `gh auth status` shows logged in.
+
+**Root cause:** The `gh auth token` command returns a fine-grained PAT (`github_pat_...`) that the token's scopes may not include `Contents: Read and write` for the target repo. This happens when the token was created with read-only access or limited to specific repos.
+
+**Test push permissions:**
+
+```bash
+# Via gh API (Windows or Linux)
+gh api repos/owner/repo --jq .permissions.push
+# Returns: true = has push, false = read-only
+```
+
+**Fixes (in order of reliability):**
+
+| Method | Command | Reliability |
+|--------|---------|-------------|
+| SSH key | `git remote set-url origin git@github.com:owner/repo.git` | ✅ Best — works anywhere |
+| Classic PAT | Create at github.com/settings/tokens with `repo` scope | ✅ Reliable |
+| Fine-grained PAT | Enable `Contents: Read and write` in repo settings | ⚠️ Fragile, easy to misconfigure |
+
+**SSH is the safest bet if you already have keys set up:**
+
+```bash
+# Test SSH auth
+ssh -T git@github.com
+# Expected: "Hi username! You've successfully authenticated..."
+
+# Switch remote to SSH
+git remote set-url origin git@github.com:owner/repo.git
+git push origin main
+```
+
+### When the Remote Has New Files You Don't Have Locally
+
+The merge with `--allow-unrelated-histories` will bring them in automatically. After `git checkout origin/main -- .`, those remote-only files appear as staged additions (`A` in `git status`) — they should remain tracked.
+
+### Pitfalls
+
+- **`.gitignore` conflict**: If both sides have a `.gitignore`, the checkout of the remote version replaces yours. Verify the remote `.gitignore` covers all your local exclusion needs (.venv/, __pycache__, .env, etc.) before committing.
+- **Large `.venv/` directories**: If the local folder has a virtual environment, ensure `.venv/` or `venv/` is in `.gitignore` before staging, or exclude it manually.
+- **`No such device or address` on push**: Git couldn't read credentials in a non-interactive session. Switch to SSH or embed credentials in the remote URL.
+- **`--allow-unrelated-histories` required**: This flag is mandatory when combining two independent git histories. Without it, git refuses the merge outright.
+
+---
+
 ## Quick Reference Table
 
 | Action | gh | git + curl |
 |--------|-----|-----------|
 | Clone | `gh repo clone o/r` | `git clone https://github.com/o/r.git` |
 | Create repo | `gh repo create name --public` | `curl POST /user/repos` |
+| Adopt local → existing repo | (no gh shortcut) | `git init` + `git merge --allow-unrelated-histories` + conflict resolution |
 | Fork | `gh repo fork o/r --clone` | `curl POST /repos/o/r/forks` + `git clone` |
 | Repo info | `gh repo view o/r` | `curl GET /repos/o/r` |
 | Edit settings | `gh repo edit --...` | `curl PATCH /repos/o/r` |
