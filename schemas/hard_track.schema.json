@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HardTrack",
+  "description": "Cooldowns 與 Blocklist 的機械化寫入。LLM 看不到，由 apply_hard_track.py 在決策前檢查。",
+  "type": "object",
+  "required": ["version", "cooldowns", "blocklist"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "2.0"
+    },
+    "cooldowns": {
+      "type": "object",
+      "description": "entity_id → cooldown 狀態",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "冷卻期結束時間"
+          },
+          "reason": {
+            "type": "string",
+            "description": "觸發原因"
+          },
+          "failure_count": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "blocklist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string",
+            "description": "被封鎖的實體"
+          },
+          "added_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

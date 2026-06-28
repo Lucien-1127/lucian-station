@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lesson",
+  "description": "Template-driven 衍生的單一教訓。LLM 只讀不寫，全部由 derive_lesson.py 根據 outcome 模板生成。",
+  "type": "object",
+  "required": ["id", "outcome_id", "task_type", "rule", "tags", "confidence", "created_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "outcome_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "關聯的 outcome record ID"
+    },
+    "task_type": {
+      "type": "string"
+    },
+    "rule": {
+      "type": "string",
+      "description": "格式: PREFER: ... / AVOID: ... / WORKED: ... / FAILED: ...",
+      "pattern": "^(PREFER|AVOID|WORKED|FAILED):"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "用於 ROLE-MATCHED 過濾"
+    },
+    "role": {
+      "type": "string",
+      "description": "對應的 agent 角色（預設 default）"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "pinned": {
+      "type": "boolean",
+      "description": "PINNED tier 的 lesson，不受 RECENT cap 限制"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "context": {
+      "type": "string",
+      "description": "觸發 lesson 的具體情境描述（可選）"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SignalWeights",
+  "description": "Darwin 信號加權快照。每次 recalc_weights.py 執行後更新，JSON 直接注入 PINNED tier。",
+  "type": "object",
+  "required": ["version", "updated_at", "sample_count", "weights"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "2.0"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sample_count": {
+      "type": "integer",
+      "description": "用於計算當前權重的樣本數（須 ≥ minSamples 才執行演化）"
+    },
+    "window_days": {
+      "type": "integer",
+      "description": "滾動窗口天數（預設 60）"
+    },
+    "weights": {
+      "type": "object",
+      "description": "各信號名稱 → 權重状态",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "w": {
+            "type": "number",
+            "description": "當前權重，乘數。1.0 = 無偏。"
+          },
+          "history": {
+            "type": "array",
+            "items": { "type": "number" },
+            "description": "歷史權重值，用於追蹤演化軌跡"
+          },
+          "lift": {
+            "type": "number",
+            "description": "上次計算的 lift 值（正 = 預測力高於平均）"
+          }
+        }
+      }
+    }
+  }
+}

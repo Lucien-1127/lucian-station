@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OutcomeRecord",
+  "description": "每次任務/決策完成後的結果快照。signal_snapshot 在 entry 時捕獲，outcome 在 close 時填寫。",
+  "type": "object",
+  "required": ["id", "ts", "task_type", "signal_snapshot", "outcome_value", "close_reason"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "唯一識別碼"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "任務完成時間（ISO8601）"
+    },
+    "task_type": {
+      "type": "string",
+      "description": "任務類型，對應 ROLE_TAGS 的角色區分"
+    },
+    "entity": {
+      "type": "string",
+      "description": "實體名稱（skill-name, mode, 或自訂 task-id）"
+    },
+    "outcome_value": {
+      "type": "number",
+      "description": "標準化結果值。1.0 = 成功, 0.0 = 中性, -1.0 = 失敗。範圍 [-1, 1]"
+    },
+    "outcome_type": {
+      "type": "string",
+      "enum": ["success", "partial", "failure", "neutral"],
+      "description": "定性分類"
+    },
+    "close_reason": {
+      "type": "string",
+      "enum": ["completed", "user_corrected", "failed", "timeout", "blocked"],
+      "description": "結束原因"
+    },
+    "signal_snapshot": {
+      "type": "object",
+      "description": "在決策當下捕獲的信号，用於事後分析",
+      "properties": {
+        "tool_calls": {
+          "type": "integer",
+          "description": "工具調用次數"
+        },
+        "cost_usd": {
+          "type": "number",
+          "description": "API 成本（美元）"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "description": "任務耗時（毫秒）"
+        },
+        "skill_used": {
+          "type": "string",
+          "description": "主要使用的技能名稱"
+        },
+        "mode": {
+          "type": "string",
+          "description": "任務模式（如 CONSULTANT / LITIGATION / WRITER 等）"
+        },
+        "corrected": {
+          "type": "boolean",
+          "description": "用戶是否有糾正"
+        },
+        "confidence": {
+          "type": "number",
+          "description": "決策時的信心度估計 [0, 1]"
+        }
+      }
+    },
+    "lesson_id": {
+      "type": ["string", "null"],
+      "description": "關聯的 lesson ID（衍生後填入）"
+    },
+    "version": {
+      "type": "string",
+      "const": "2.0",
+      "description": "Schema 版本"
+    }
+  }
+}

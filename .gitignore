@@ -1,6 +1,8 @@
-# 暫存檔
-*.tmp
-*.swp
-.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+data/*.json
+data/*.jsonl
 
-# 大檔案（備份目錄本身已控管，如果個別檔案過大可在此排除）
