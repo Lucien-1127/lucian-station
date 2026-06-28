@@ -1,6 +1,6 @@
-# lucian-station — 育昇自學引擎 v2.0
+# lucian-station — 智研自學引擎 V13.1
 
-> 企業級常駐對話中樞的學習/演化域。透過 Outcome Record → Lesson 衍生 → Darwin 信號加權 → Hard Track 過濾的雙軌閉環，實現「狀態自校驗、動態豁免邊界、精準容量防護、可摺疊視覺降噪」的自動化自學。
+> 法律 AI 工作流引擎的學習/演化域。透過十一層 Pipeline（研究 → 引用 → 策略 → 草稿 → 閘門 → 修復 → 信心 → 溯源）與 Outcome Record → Lesson 衍生 → Darwin 信號加權 → Hard Track 過濾的雙軌閉環，實現「研究先於輸出、引用先於寫作、驗證先於交付」的自動化自學。
 
 ---
 
@@ -8,7 +8,7 @@
 
 ```
 lucian-station/
-├── AGENTS.md              ← V13.0 磐石矩陣（系統提示詞）
+├── AGENTS.md              ← V13.1 法律 AI 工作流引擎（十一層 Pipeline + Self-Healing Engine + Confidence Engine）
 ├── schemas/              ← JSON Schema 定義
 │   ├── outcome_record.schema.json
 │   ├── lesson.schema.json
@@ -82,22 +82,35 @@ python3 scripts/self_learning_cycle.py --phase 3 --min-samples 0  # 跳過冷啟
 
 ---
 
-## V13.0 磐石矩陣
+## V13.1 十一層法律 AI Pipeline
 
-V13.0 是 lucian-station 的系統提示詞，定義了企業級常駐對話中樞的標準行為。詳見 [`AGENTS.md`](AGENTS.md)。
+V13.1 是 lucian-station 的系統提示詞，定義了法律 AI 工作流引擎的標準行為。核心架構：
 
----
+```
+任務解析 → 研究引擎 → 證據建構 → 策略引擎 → 草稿生成
+    ↓           ↓           ↓           ↓           ↓
+[GATE_1]    [GATE_2]    [GATE_3]    [GATE_4]    [GATE_5]
+                                              ↓
+                         修復引擎 ← 閘門核查（Self-Healing Engine）
+                             ↓              ↓
+                      [GATE_7]        [GATE_6: 🟢🟡🔴]
+                             ↓
+                      信心評估 → 溯源引擎 → 最終輸出
+                         ↓           ↓
+                      [GATE_8]    [GATE_9]
+```
 
-## V13.0 審查結果
+詳見 [`AGENTS.md`](AGENTS.md)。
 
-多模型合議庭（Claude Sonnet 4）審查後的 10 項發現已併入 AGENTS.md v13.0。
-最高優先項目：
+## V13.1 主要升級
 
-1. ✅ 任務邊界明確定義（涵蓋職責邊界與拒絕條件）
-2. ✅ 關鍵變數 Z 的定義（影響機率結果的關鍵隨機變數）
-3. ✅ 非量化領域的明確定義（論述、解釋、分類 vs 量化計算）
-4. ✅ 配置指令完整列舉（/verbose, /expand, /compact, /status, /reset）
-5. ✅ 連續校驗失敗處理（連續 3 次警告後暂停新任務）
+1. **十一層 Pipeline**：從七層矩陣升級，新增 Research/Evidence/Strategy 三個前置層
+2. **Self-Healing Engine**：🟢🟡🔴 三級修復協議
+3. **Confidence Engine**：六因子動態加權，輸出 `95.3` 小數分數
+4. **三層引用鐵律**：法條 + 大法官釋字 + 最高法院判例，缺一不可 BLOCKED
+5. **Utility Tools**：PARAGRAPH_CONTROLLER / FORBIDDEN_TERMS_FILTER / LOCALIZATION_PROCESSOR / SYLLOGISM_CHECKER
+6. **Authority 等級**：憲法★★★★★ > 法律★★★★☆ > 判例★★★☆☆ > AI推論★☆☆☆☆
+7. **IAM 動態權重**：多模型委員會的 Veto 權因閘門而異（非靜態固定）
 
 ---
 
@@ -112,5 +125,7 @@ V13.0 是 lucian-station 的系統提示詞，定義了企業級常駐對話中�
 
 ## 版本
 
+- V13.1 — 2026-06-28：法律 AI 工作流引擎，整合 v1.3 Utility Tools + Self-Healing + Confidence Engine + IAM 動態權重矩陣
+- V13.0 — 2026-06-28：磐石矩陣，七層運作矩陣 + 雙軌自學引擎
 - v2.0 — 2026-06-28：完整重寫，基於 V13.0 磐石矩陣
 - v1.x — 早期版本（hermes-skills based）
