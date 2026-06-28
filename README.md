@@ -1,6 +1,41 @@
-# lucian-station — 智研 AI 系統 V13.2 (Decision OS)
+# lucian-station — 智研 AI 系統 (Legal Governance Runtime)
 
-> 法律 AI 工作流引擎的學習/演化域。透過十一層 Pipeline（研究 → 引用 → 策略 → 草稿 → 閘門 → 修復 → 信心 → 溯源）與 Decision OS 治理層，實現「零信任 (Zero Trust) 檢索、委員會審議 (Veto Gate)、量化自我演化」的自動化系統。
+> **Zhiyan (智研)** 不是一個單純的法律 AI 模型，而是一個 **Legal Governance Runtime (LGR)**。
+> 我們不生成「看似正確」的答案，我們生成「具備溯源與審計軌跡」的法律決策過程。
+
+---
+
+## 為什麼選擇智研 (Zhiyan vs. Generic Legal AI)
+
+| 項目 | 一般 Legal AI | 智研 (LGR) |
+| :--- | :---: | :---: |
+| **核心目標** | 生成答案 | 決策治理 |
+| **RAG 架構** | 檢索 (Retrieval) | 治理級檢索 (Governed Retrieval) |
+| **決策邏輯** | 黑盒 LLM 推論 | 決策軌跡 (Traceable) |
+| **安全邊界** | 提示詞防護 | 治理不變量 (Invariants) |
+| **驗證機制** | 外部評測 | 治理覆蓋率 (Policy Coverage) |
+| **決策可重播性** | ❌ 否 | ✅ 是 (Governance Replay) |
+
+---
+
+## 核心治理原則 (Three Core Principles)
+
+1. **Every Decision Must Be Traceable**: 每一份法律論述，均可回溯至 SQLite 資料庫中的具體證據區塊。
+2. **Every Policy Must Be Testable**: 所有的治理規則皆須通過 Replay Framework 驗證，拒絕主觀臆測。
+3. **Every Evolution Must Be Replayable**: 任何對系統策略的更新，都必須通過全量案例回歸測試 (Regression Test)。
+
+---
+
+## 架構概覽 (Architecture Overview)
+
+系統分為三大子系統，強制執行分離原則 (Separation of Concerns)：
+
+```
+zhiyan-legal/
+├── governance/       # 治理契約：定義決策邏輯、Invariants 與 Policy 語法
+├── verification/     # 稽核架構：Replay Engine、Coverage Generator 與測試案例
+└── decision_os/      # 執行運行環境：Pipeline、Committee Agent 與各類 Agent 邏輯
+```
 
 ---
 
