@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>雲手機 - Cloud Phone</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html,body { width:100%; height:100%; overscroll-behavior:none; overflow:hidden; background:#000; font-family:-apple-system,sans-serif; touch-action:none; -webkit-user-select:none; user-select:none; }
+        body { display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; }
+        .logo { font-size:48px; margin-bottom:10px; }
+        h1 { font-size:24px; font-weight:600; margin-bottom:8px; letter-spacing:2px; }
+        p { font-size:14px; color:#888; margin-bottom:30px; }
+        .btn { display:inline-block; padding:16px 48px; background:#007aff; color:#fff; border:none; border-radius:12px; font-size:17px; font-weight:600; text-decoration:none; -webkit-tap-highlight-color:transparent; transition:opacity .2s; }
+        .btn:active { opacity:.7; }
+        .status { margin-top:20px; font-size:13px; color:#555; }
+        .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#30d158; margin-right:6px; animation:pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+        @media(prefers-color-scheme:light){ body{background:#f2f2f7;color:#000} p{color:#8e8e93} }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">📱</div>
+        <h1>雲手機</h1>
+        <p>Android <span id="device">Pixel 8</span></p>
+        <span class="btn" id="launchBtn">🔌 連線</span>
+        <div class="status"><span class="dot"></span>伺服器運作中</div>
+    </div>
+    <script>
+        document.getElementById('launchBtn').addEventListener('click',function(){
+            window.location.href='/vnc.html?autoconnect=true&resize=scale&view_clip=true&quality=6&compression=9';
+        });
+        document.addEventListener('touchmove',function(e){e.preventDefault()},{passive:false});
+        document.addEventListener('gesturestart',function(e){e.preventDefault()});
+    </script>
+</body>
+</html>
