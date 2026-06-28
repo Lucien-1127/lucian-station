@@ -1,6 +1,6 @@
-# lucian-station — 智研自學引擎 V13.1
+# lucian-station — 智研 AI 系統 V13.2 (Decision OS)
 
-> 法律 AI 工作流引擎的學習/演化域。透過十一層 Pipeline（研究 → 引用 → 策略 → 草稿 → 閘門 → 修復 → 信心 → 溯源）與 Outcome Record → Lesson 衍生 → Darwin 信號加權 → Hard Track 過濾的雙軌閉環，實現「研究先於輸出、引用先於寫作、驗證先於交付」的自動化自學。
+> 法律 AI 工作流引擎的學習/演化域。透過十一層 Pipeline（研究 → 引用 → 策略 → 草稿 → 閘門 → 修復 → 信心 → 溯源）與 Decision OS 治理層，實現「零信任 (Zero Trust) 檢索、委員會審議 (Veto Gate)、量化自我演化」的自動化系統。
 
 ---
 
@@ -125,7 +125,7 @@ V13.1 是 lucian-station 的系統提示詞，定義了法律 AI 工作流引擎
 
 ## 版本
 
+- V13.2 — 2026-06-28：Decision OS，導入 Policy Engine、Governance Contract 與多代理人 IAM 權限邊界管理
 - V13.1 — 2026-06-28：法律 AI 工作流引擎，整合 v1.3 Utility Tools + Self-Healing + Confidence Engine + IAM 動態權重矩陣
-- V13.0 — 2026-06-28：磐石矩陣，七層運作矩陣 + 雙軌自學引擎
 - v2.0 — 2026-06-28：完整重寫，基於 V13.0 磐石矩陣
 - v1.x — 早期版本（hermes-skills based）
