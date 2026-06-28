@@ -1,0 +1,30 @@
+# PolyBrain Configuration
+models:
+  orchestrator: "custom/agnes-2.0-flash"
+  researcher: "custom/agnes-2.0-flash"
+  builder: "custom/agnes-2.0-flash"
+  synthesizer: "custom/agnes-2.0-flash"
+  verifier: "custom/agnes-2.0-flash"
+  fallback: "custom/agnes-2.0-flash"
+
+providers:
+  orchestrator: "custom"
+  researcher: "custom"
+  builder: "custom"
+  synthesizer: "custom"
+  verifier: "custom"
+  fallback: "custom"
+
+toolsets:
+  researcher: ["web", "browser"]
+  builder: ["terminal", "file"]
+  synthesizer: ["file"]
+  verifier: ["web"]
+
+settings:
+  max_parallel: 3
+  timeout_sec: 600
+  retry_count: 1
+  orchestrator_timeout_sec: 120
+  orchestrator_retry_count: 1
+  artifacts_dir: ".hermes/plans/polybrain"

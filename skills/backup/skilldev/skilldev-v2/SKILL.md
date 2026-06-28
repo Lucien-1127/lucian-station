@@ -136,6 +136,20 @@ hermes curator status     # 顯示各技能評分與推薦操作
 
 ## 已知問題與解決方案
 
+### GitHub 技能安裝 — API key 長度限制
+- **症狀**：透過 terminal 寫入長 API key 到 config.yaml 時，命令因 token 過長而 timeout 或被截斷
+- **原因**：API key 字串超過 8K tokens 的傳輸限制，導致 stream timeout
+- **修復**：改用 `sed` 精確行號替換（`sed -i '6s/.*/.../' file`），或直接手動編輯 `~/.hermes/config.yaml` 的 `model.api_key` 欄位。不要一次性塞完整 key 到 terminal command 中。
+- **替代方案**：使用 `hermes config set model.api_key 'YOUR_KEY'` CLI 指令，它會自動處理長字串。
+
+### 子代理技能安裝流程
+1. `git clone` 到 `/tmp/`
+2. `cp -r` 到 `~/.hermes/skills/<category>/<skill-name>/`
+3. 確認 `SKILL.md` 有 `name:` frontmatter（沒有就補上）
+4. 檢查 `config.yaml` 是否需要 provider/api_key 設定
+5. `hermes skills list` 驗證
+6. 清理 `/tmp/` 目錄
+
 ### Curator 前台執行卡住
 - **症狀**：`hermes curator run` 前台執行無輸出或 process wait timeout
 - **原因**：LLM 審查階段（_run_llm_review）建立 AIAgent fork，對大量技能逐步評估需要 2-5+ 分鐘

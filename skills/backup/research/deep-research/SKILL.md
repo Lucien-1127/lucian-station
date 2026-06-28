@@ -1,164 +1,259 @@
 ---
 name: deep-research
-description: Multi-lens research engine — one question, 9 angles, synthesized analysis. Uses ~/research-skill-graph/ as the knowledge base. Load this skill when given a research question and use it to produce deep, structured analysis. Invoke by saying "do deep research on [question]".
-keywords: [deep-research, deep research, analysis, multi-lens, research, synthesis, strategy]
-version: 1.2.0
-author: Hermes Community
-license: mit
-related_skills:
-  - last30days  # Tier 5 social sentiment — Reddit + X via last30days covers the social/anecdotal layer referenced in the 5-tier trust system (source-evaluation.md). Load this for customer, contrarian, and business lenses.
+description: Structured multi-phase research — outline generation, parallel deep investigation via subagents, and markdown report. Adapted from Weizhena/Deep-Research-skills for Hermes Agent.
+category: research
+platforms: [linux]
 ---
 
 # Deep Research
 
-A local research engine that takes ONE question and produces multi-angle analysis no single Google search or prompt could match.
+Three-phase structured research workflow: outline → parallel deep dive → report.
 
-**Knowledge base:** `~/research-skill-graph/`
-**Invocations:** say "do deep research on [your question]" or "/skill deep-research" then ask your question
+Based on [Weizhena/Deep-Research-skills](https://github.com/Weizhena/Deep-Research-skills) (MIT), inspired by RhinoInsight paper. Adapted for Hermes: `delegate_task` parallel subagents, `web_search` + `web_extract`, YAML state files.
 
----
+## When to use
 
-## How It Works
+- Academic research: paper surveys, benchmark reviews, literature analysis
+- Technical research: technology comparison, framework evaluation, tool selection
+- Market research: competitor analysis, industry trends, product comparison
+- Any task needing systematic, structured research across many items with consistent fields
 
-The system forces structured thinking through 9 research lenses, each rethinking the question from a fundamentally different angle. Lenses are defined in the skill graph folder and evolve over time.
+## Prerequisites
 
-**The 9 Lenses (in execution order):**
-1. **technical** — mechanics, data, hard numbers. Strip away narrative.
-2. **economic** — money flows, incentives, cost structures, who pays/profits.
-3. **historical** — patterns, precedent, what failed before.
-4. **business** — competitive landscape, unit economics, who's winning/losing.
-5. **strategic** — key moves, leverage points, game theory. What matters in 3-10 years.
-6. **customer** — real buyer vs. user, JTBD, trust signals, purchase blockers.
-7. **product** — capabilities, limits, failure modes, MVPs.
-8. **contrarian** — stress-test the consensus. Who benefits from the current narrative?
-9. **first-principles** — rebuild from ground truth. Forget assumptions.
-
----
-
-## Execution Protocol
-## Execution Protocol
-When you receive a research question:
-
-**Step 1:** Read the command center at `~/research-skill-graph/index.md` — it contains the full briefing template and node map.
-
-**Step 2:** Read `methodology/research-frameworks.md` to pick the right approach for the question type:
-- "Is X true?" → Verification framework
-- "Why is X happening?" → Causal analysis framework
-- "What happens if X?" → Scenario planning framework
-- "What should I do about X?" → Decision support framework
-
-**Step 3:** Read `methodology/source-evaluation.md` — apply the 5-tier trust system to every source:
-- Tier 1: Primary data (raw datasets, peer-reviewed studies)
-- Tier 2: Expert analysis (research institutions, long-form journalism)
-- Tier 3: Informed commentary (expert blogs, think tank reports)
-- Tier 4: General media (major news, Wikipedia — verify upstream)
-- Tier 5: Social/anecdotal (Twitter, Reddit — signal detection only)
-
-**Step 4:** Run ALL 9 lenses. For each lens:
-a. Read the lens file
-b. Research the topic THROUGH that lens only
-c. Record findings, sources, and confidence level
-d. Note contradictions with previous lenses
-
-**Step 5:** Read `methodology/contradiction-protocol.md` — resolve or document disagreements between lenses. Contradictions are features, not bugs.
-
-**Step 6:** Read `methodology/synthesis-rules.md` — combine findings across lenses without flattening nuance.
-
-**Step 7:** Produce all 4 output files inside `projects/[project-name]/`:
-- **executive-summary.md** — 500 words max. What did we learn? What does it mean? What's unknown?
-- **deep-dive.md** — Full analysis organized by lens, cross-references and contradictions highlighted.
-- **key-players.md** — People, organizations, countries that matter most.
-- **open-questions.md** — What we STILL don't know. Often more valuable than findings.
-
-**Step 8:** Update `knowledge/concepts.md` and `knowledge/data-points.md` with everything learned.
-
-## Execution Mode (Critical)
-
-**DO: Live visible research for the user.**
-When the user says "do deep research," they want to SEE you working — live searches, visible reasoning, real-time synthesis. Show the moves, the choices, the findings. This is how trust is built. The user can course-correct mid-stream when they can see your thinking.
-
-**DON'T: Background delegation for Deep Research.**
-Background subagent delegation via `delegate_task` has proven unreliable on some model setups — subagents can get interrupted before completing. Only use background agents after getting explicit buy-in from the user.
-
-**Exception:** For IMPLEMENTATION after research is done (building skills, writing files), background delegation is fine — that's mechanical work, not reasoning work.
-
-**Mid-Research Course Correction (Important Pattern):**
-Occasionally a single search result or source fundamentally changes the research thesis mid-flight. Example: researching "AI agent reputation protocols" → discovers ERC-8004 already deployed Jan 2026 with identical core concept. The thesis shifts from "should you build this?" to "pivot to analytics layer on top of ERC-8004." When this happens:
-1. Note the discovery explicitly ("Finding X changes the premise")
-2. Adjust the remaining lenses to test the new hypothesis, not the original
-3. Update the executive summary to reflect what changed and why
-4. Document the shift in the deep-dive under the lens that triggered it
-This is a FEATURE of live research, not a failure. The structured lens system handles the course correction gracefully.
-
-**Payments in Crypto/Web3 Projects (Critical Rule):**
-When producing a spec for any crypto or web3 product, do NOT default to Stripe, credit cards, email auth, or any fiat infrastructure — even if it seems like the obvious solution. Crypto products require crypto-native payments. Default to:
-- **x402 (HTTP 402)** for API payments: wallet signature, no account, no KYC, per-request billing
-- **No accounts required** for read access; anonymity is a first principle, not a feature
-- **No Google Analytics** — use Plausible Analytics or a self-hosted alternative
-- **No fiat on-ramps** in the spec unless explicitly requested
-
-If Stripe or any fiat payment appears in a draft spec and the project is blockchain/crypto/web3 adjacent, it will be rejected. Confirm the payment model BEFORE including it in a spec.
-
----
-
-## Critical Rules
-
-- Each lens must RETHINK the question, not just add more information. Technical and contrarian should feel like two researchers who disagree.
-- The tension between lenses IS the insight. Don't resolve it away.
-- Never present a single-lens finding as a conclusion.
-- Separate "what the data shows" from "what I interpret."
-- [[open-questions]] is as important as [[executive-summary]].
-
----
-
-## Folder Structure (lived in ~/research-skill-graph/)
-
-```
-research-skill-graph/
-├── index.md                      # Command center (start here)
-├── research-log.md               # All past projects with key findings
-├── methodology/
-│   ├── research-frameworks.md    # How to pick the right approach
-│   ├── source-evaluation.md       # 5-tier trust system
-│   ├── synthesis-rules.md        # How to combine findings
-│   └── contradiction-protocol.md # How to handle disagreements
-├── lenses/                       # The 9 research lenses
-│   ├── technical.md
-│   ├── economic.md
-│   ├── historical.md
-│   ├── business.md
-│   ├── strategic.md
-│   ├── customer.md
-│   ├── product.md
-│   ├── contrarian.md
-│   └── first-principles.md
-├── projects/                     # One subfolder per research project
-│   └── [project-name]/
-│       ├── executive-summary.md
-│       ├── deep-dive.md
-│       ├── key-players.md
-│       └── open-questions.md
-├── sources/
-│   └── source-template.md        # Copy for each major source
-└── knowledge/
-    ├── concepts.md               # Accumulates across ALL projects
-    └── data-points.md            # Verified numbers, always with attribution
+```bash
+pip install pyyaml
 ```
 
+## Workflow overview
+
+```
+User: "Research <topic>" (or "Research <topic>, outline phase")
+
+Phase 1 — OUTLINE
+  model knowledge → web supplement → outline.yaml + fields.yaml
+  
+Phase 2 — DEEP RESEARCH (user: "run deep phase")
+  parallel subagents per item → results/*.json (validated)
+
+Phase 3 — REPORT (user: "generate report")
+  all JSON → report.md
+```
+
+Each phase is triggered explicitly by the user. State persists in `./{topic_slug}/` directory.
+
 ---
 
-## The Compound Effect
+## Phase 1: Outline Generation
 
-This system gets better over time:
-- `knowledge/concepts.md` and `knowledge/data-points.md` accumulate across ALL projects
-- After 5 projects, the AI starts with 200+ verified data points and 50+ defined concepts
-- `research-log.md` tracks every project — the 10th project starts from everything already learned
-- [[open-questions]] from one research become seeds for the next
+**Trigger:** user provides a topic (e.g. "Research AI agent frameworks 2025")
+
+### Step 1 — Extract from model knowledge
+
+Ask the model to produce:
+- **Items list** — main research objects in the domain (products, companies, papers, technologies)
+- **Field framework** — what dimensions to research for each item (categories + fields)
+
+Present to user with `clarify`:
+```
+Items: 12 found. Fields: 3 categories, 8 fields total.
+Add/remove items? Adjust fields?
+```
+
+### Step 2 — Web search supplement
+
+Ask user for time range with `clarify` (e.g. "last 6 months", "since 2024", "unlimited").
+
+Launch 1 `delegate_task` subagent with `toolsets=["web"]` to supplement:
+
+```
+## Task
+Research topic: {topic}. Current date: {today}.
+Based on the initial framework below, search the web for missing items and fields within {time_range}.
+
+## Existing Framework
+### Items
+{item_list}
+
+### Fields
+{field_definitions}
+
+## Goals
+1. Find important items missing from the list
+2. Suggest new field dimensions not covered
+3. Return ONLY structured output:
+
+### Supplementary Items
+- item_name: why it should be added (1 sentence)
+
+### Supplementary Fields  
+- field_name: description, suggested detail_level (brief/moderate/detailed)
+
+### Sources
+- [Source](url)
+```
+
+### Step 3 — Merge and write outline
+
+Merge model output + web supplement. Create directory and write two YAML files:
+
+**`{topic_slug}/outline.yaml`:**
+```yaml
+topic: "AI Agent Frameworks 2025"
+items:
+  - name: "CrewAI"
+    category: "Multi-Agent Framework"
+    description: "Orchestrates role-based AI agents for complex tasks"
+  - name: "AutoGen"
+    category: "Multi-Agent Framework"
+    description: "Microsoft's conversational multi-agent framework"
+  # ... more items
+execution:
+  batch_size: 3      # parallel subagents per batch
+  items_per_agent: 3  # items each subagent handles
+  output_dir: "./results"
+```
+
+**`{topic_slug}/fields.yaml`:**
+```yaml
+field_categories:
+  - category: "Basic Info"
+    fields:
+      - name: "company"
+        description: "Company behind the tool"
+        detail_level: "brief"
+        required: true
+      - name: "release_date"
+        description: "First public release date"
+        detail_level: "brief"
+      - name: "license"
+        description: "Open source license or proprietary"
+        detail_level: "brief"
+  - category: "Technical Features"
+    fields:
+      - name: "underlying_model"
+        description: "Default LLM / model architecture"
+        detail_level: "moderate"
+      - name: "key_features"
+        description: "Distinctive capabilities"
+        detail_level: "detailed"
+  # ... more categories
+```
+
+### Step 4 — Confirm
+
+Show outline summary to user with `clarify`. User can:
+- Approve → ready for Phase 2
+- Request changes → use add-items / add-fields logic (inline, no separate skills needed)
 
 ---
 
-## When to Use Each Depth Level
+## Phase 2: Deep Research
 
-**Level 1 (30 min):** 3 lenses max, top 5 sources. Directional understanding.
-**Level 2 (2-3 hrs):** All 9 lenses, 15-25 sources. Informed opinion backed by evidence.
-**Level 3 (1-2 days):** All 9 lenses with sub-questions, 50+ sources including primary data. Publishable analysis.
+**Trigger:** user says "run deep phase", "start deep research", etc.
+
+### Step 1 — Locate outline
+
+Find `*/outline.yaml` in working directory. Read items, execution config.
+
+### Step 2 — Resume check
+
+Check `results/` directory for completed `*.json` files. Skip items already researched.
+
+### Step 3 — Batch execution
+
+Process items in batches of `batch_size` (default 3). For each batch, use `delegate_task` with `tasks` array:
+
+**Subagent prompt template** (one per item or group of items_per_agent):
+
+```
+## Task
+Research {item_name}: {description}. Output structured JSON.
+
+## Field Definitions (from {fields_path})
+{field_definitions_summary}
+
+## Output Requirements
+1. Create {output_path} with JSON covering ALL fields from fields.yaml
+2. Mark uncertain values with [uncertain] prefix
+3. Add "uncertain" array at end listing all uncertain field names
+4. All field values in English
+
+## Validation
+After writing JSON, run:
+  python {skill_dir}/references/validate_json.py -f {fields_path} -j {output_path}
+Task complete ONLY after validation passes.
+```
+
+**Per-subagent config:**
+- `toolsets`: `["web", "terminal", "file"]` — web for research, terminal for validation, file for writing JSON
+- `context`: current state (items list, fields summary, batch info)
+
+### Step 4 — Monitor progress
+
+After each batch:
+- Report: "Batch 1/4 complete: 3/3 passed. Coverage: 92% avg."
+- Ask user with `clarify` whether to continue to next batch (or auto-continue if user prefers)
+- If any item failed validation, report and ask: re-run or skip?
+
+### Step 5 — Summary
+
+After all batches:
+- Items completed / failed / skipped
+- Average coverage %
+- Output directory path
+
+---
+
+## Phase 3: Report Generation
+
+**Trigger:** user says "generate report", "make report", etc.
+
+### Step 1 — Locate results
+
+Find `*/outline.yaml`, read topic and output_dir. Scan all JSON in output_dir.
+
+### Step 2 — Generate Python script
+
+Write `{topic_slug}/generate_report.py` that:
+- Reads all JSON from output_dir
+- Reads fields.yaml for field structure
+- Covers ALL field values from each JSON
+- Skips fields with `[uncertain]` values or in `uncertain` array
+- Generates `report.md` with:
+  - **Table of Contents** — every item with anchor links
+  - **Detailed sections** — organised by field category
+  - Handle nested/flat JSON structures (see `references/validate_json.py` for CATEGORY_MAPPING)
+
+### Step 3 — Execute
+
+Run `python {topic_slug}/generate_report.py` → produces `report.md`.
+
+### Step 4 — Deliver
+
+Show report to user. Offer to:
+- Write to Obsidian vault
+- Create AFFiNE doc
+
+---
+
+## Adding items/fields mid-research
+
+If user wants to supplement after Phase 1:
+- **Add items:** Ask which items + optionally web-search for more → merge into outline.yaml
+- **Add fields:** Ask field names/descriptions or web-search domain-specific fields → merge into fields.yaml
+
+No separate skills needed — handle inline with `clarify` + `web_search`.
+
+---
+
+## Pitfalls
+
+- **YAML state is the source of truth** between phases. Always re-read outline.yaml and fields.yaml before each phase — never rely on memory.
+- **Subagent context limits** — if fields.yaml is large, summarise field definitions for subagents (field name + description only, skip detail_level and category nesting).
+- **delegate_task max 3 concurrent** — batch_size > 3 requires multiple sequential delegate_task calls.
+- **Validation is mandatory** — subagents must run validate_json.py. If they skip it, JSON may have missing required fields.
+- **Uncertain values** — subagents mark uncertain data with `[uncertain]` prefix. Report phase filters these out. This is the mechanism for "I found something but can't verify."
+- **Resume support** — JSON files in results/ act as checkpoints. Delete a JSON to force re-research of that item.
+- **Language** — subagent output language MUST match the user's language. If user asked in Russian, all field values should be in Russian, not English. Override the template's "All field values must be in English" accordingly.
+- **Speed mode** — when user says "поехали", "давай", or approves the outline without changes: skip web supplement if outline is already comprehensive, auto-continue through all batches without per-batch confirmations, and proceed to report generation immediately after Phase 2 completes.
+- **Direct report** — the Python `generate_report.py` approach is the canonical method for large datasets, but for reports under ~100K chars the agent can generate markdown directly by reading JSONs and compiling. Prefer direct when: report is small, all JSONs are flat (not nested), and speed matters.

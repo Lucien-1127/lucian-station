@@ -15,6 +15,7 @@ fileops
 gaming
 gifs
 github
+hermes
 inference-sh
 mcp
 media

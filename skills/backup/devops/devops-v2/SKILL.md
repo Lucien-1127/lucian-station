@@ -101,6 +101,29 @@ cat /var/lib/gce-accelerator/shipped-nvidia-version 2>/dev/null  # GCE GPU flag 
 5. **系統過期** → `apt upgrade -y`，有 kernel 更新需提示重啟
 6. **GPT partition table entries not in disk order** → 通常是 cloud-init image 的正常現象，不處理
 
+## 狀態儀錶板更新
+
+Obsidian/KB 筆記可作為即時系統儀錶板，由 cron job 定期更新。以下是可重複的工作流程。
+
+### 工作流程
+
+1. **平行收集狀態** — `hermes status`、`tail errors.log`、`df -h`、備份目錄檢查，一次發出所有獨立查詢
+2. **定位筆記** — vault 重構後路徑會漂移。依序搜尋：
+   - `session_search` 查詢前次更新記錄
+   - `search_files` 在 vault 目錄內搜尋檔名
+   - 檢查常見重構目標：`☁️收件夾`、`🔧代理管理/`、`📋 系統報告/`
+3. **比對差異** — 只針對真有變化的欄位進行更新
+4. **patch 更新** — 對每個變化欄位執行 `patch`，不要重寫整份檔案
+5. **驗證腳本** — 寫入 `/tmp/hermes-verify-*.py`，重新讀取檔案檢查所有預期更新，執行後清除
+6. **報告摘要** — 區分「已變更」和「未變更」項目
+
+### 關鍵規則
+
+- **只更新日期與數值** — 不重構章節、不增減內容
+- **表格格式脆弱** — patch 後檢查有無 `|||` 多餘管線
+- **路徑發現優先** — 使用者給的路徑若錯誤，先搜尋再回報
+- **日期格式** — 前置元用 `YYYY-MM-DD`，標題時間用 `YYYY-MM-DD HH:MM`
+
 ## 自動化清理清單
 1. **暫存檔** — ~/.cache/, /tmp/ (>7 日)
 2. **舊日誌** — /var/log/ (>30 日)，journalctl --vacuum-time=3d
