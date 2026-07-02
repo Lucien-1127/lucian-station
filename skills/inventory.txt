@@ -29,5 +29,6 @@ skilldev
 smart-home
 social-media
 software-development
+sysadmin-mole-install
 trading
 yuanbao
